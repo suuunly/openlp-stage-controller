@@ -123,10 +123,10 @@ download the zip and drop it into their own `stages/` folder (TASK-09).
 
 | Task | Fragment ID | Phase | Status |
 |------|-------------|-------|--------|
-| TASK-01 — Project Setup & Settings View      | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | ✅ Done |
-| TASK-02 — Home / Role Selector View          | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | ✅ Done |
-| TASK-03 — WebSocket Connection & Real-Time   | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | ✅ Done |
-| TASK-04 — Song Navigator View                | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | ✅ Done |
+| TASK-01 — Project Setup & Settings View      | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | 🚧 In Progress (impl done, pending live-OpenLP verification) |
+| TASK-02 — Home / Role Selector View          | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | 🚧 In Progress (impl done, pending live-OpenLP verification) |
+| TASK-03 — WebSocket Connection & Real-Time   | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | 🚧 In Progress (impl done, pending live-OpenLP verification) |
+| TASK-04 — Song Navigator View                | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | 🚧 In Progress (impl done, pending live-OpenLP verification) |
 | TASK-05 — Bible Verse View                    | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | 🔲 Todo |
 | TASK-06 — Images View                         | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | 🔲 Todo |
 | TASK-07 — Presentation View                   | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | 🔲 Todo |
