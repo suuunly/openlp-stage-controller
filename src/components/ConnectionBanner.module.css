@@ -1,0 +1,17 @@
+.banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  padding: 10px var(--s-5);
+  background: var(--c-warn-tint);
+  border-bottom: 1px solid var(--c-warn-border);
+  color: var(--c-warn-text);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.banner svg {
+  color: var(--c-warn);
+}

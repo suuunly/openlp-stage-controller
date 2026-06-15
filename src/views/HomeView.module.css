@@ -1,0 +1,162 @@
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(110% 80% at 50% -10%, #1c2118 0%, var(--c-bg) 55%);
+}
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-7) var(--s-8) 6px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.wordmark {
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: 0.2em;
+  color: var(--c-text);
+}
+.product {
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: 0.03em;
+  color: var(--c-text-muted);
+}
+
+.connChip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--r-chip);
+  font-weight: 600;
+  font-size: 15px;
+  border: 1px solid transparent;
+}
+.connOk {
+  background: rgba(123, 164, 81, 0.13);
+  border-color: rgba(123, 164, 81, 0.34);
+  color: var(--c-accent-faint);
+}
+.connOk svg {
+  color: var(--c-accent);
+}
+.connDown {
+  background: var(--c-warn-tint);
+  border-color: rgba(224, 162, 58, 0.35);
+  color: var(--c-warn-text);
+}
+.connDown svg {
+  color: var(--c-warn);
+}
+
+.chooseLabel {
+  flex: none;
+  margin: var(--s-2) 0 2px;
+  padding: 0 var(--s-8);
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--c-text-faint);
+}
+
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: var(--s-5);
+  padding: 14px var(--s-8) 10px;
+}
+
+.roleCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: left;
+  padding: var(--s-7);
+  min-height: 140px;
+  border-radius: var(--r-card);
+  background: var(--grad-card);
+  border: 1px solid var(--c-line-2);
+  overflow: hidden;
+  transition: transform 0.18s, border-color 0.18s;
+}
+.roleCard:hover {
+  transform: translateY(-4px);
+  border-color: var(--c-accent-border);
+}
+.roleCard:active {
+  transform: scale(0.98);
+}
+
+.roleIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 74px;
+  height: 74px;
+  border-radius: var(--r-md);
+  background: var(--c-accent-tint);
+  color: var(--c-accent-bright);
+}
+
+.roleText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.roleTitle {
+  font-weight: 700;
+  font-size: 31px;
+  color: var(--c-text);
+}
+.roleDesc {
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--c-text-muted);
+}
+
+.roleArrow {
+  position: absolute;
+  top: 34px;
+  right: 34px;
+  color: var(--c-text-fainter);
+}
+
+.footer {
+  flex: none;
+  padding: 4px var(--s-8) var(--s-7);
+}
+
+.settingsBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 64px;
+  border-radius: var(--r-md);
+  background: var(--c-surface-inset);
+  border: 1px solid var(--c-line);
+  color: var(--c-text-3);
+  font-weight: 600;
+  font-size: 19px;
+  transition: background 0.15s;
+}
+.settingsBtn:hover {
+  background: var(--c-surface-2);
+}
+.settingsBtn svg {
+  color: var(--c-text-muted);
+}

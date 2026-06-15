@@ -1,0 +1,100 @@
+/*
+ * Design tokens — extracted from the Claude Design spec
+ * ("OpenLP Stage Controller.dc.html"). Elim warm-charcoal dark theme with a
+ * broadcast-green accent (green = live / connected). Single source of truth;
+ * every component references these custom properties, never raw hex.
+ */
+:root {
+  /* ---- Surfaces (darkest → lightest) ---- */
+  --c-bg-deep: #050507; /* html/body backstop */
+  --c-bg: #1a181d; /* primary app background */
+  --c-bg-sunken: #17151a; /* right panes, footer bars */
+  --c-surface: #211e24; /* cards */
+  --c-surface-2: #252128; /* inputs, secondary buttons, chips */
+  --c-surface-3: #2b2730; /* number chips (inactive) */
+  --c-surface-hover: #2d2931; /* hover state for surface-2 */
+  --c-surface-inset: #201d23; /* segmented-control track, settings buttons */
+
+  /* role-card gradient */
+  --grad-card: linear-gradient(158deg, #28232a, #201d23);
+  /* live-verse panel gradient */
+  --grad-verse: linear-gradient(160deg, #221e26, #1b1920);
+  /* live-song card gradient */
+  --grad-song-live: linear-gradient(160deg, #23241c, #1e1c22);
+
+  /* ---- Accent (Elim green) ---- */
+  --c-accent: #7ba451; /* brand green */
+  --c-accent-bright: #9bc77a; /* accent icons / accent text */
+  --c-accent-soft: #c2e6a0; /* selected number cell text */
+  --c-accent-faint: #bcd9a3; /* connected status text */
+  --c-accent-badge: #6e9a43; /* solid "on screen" badge bg */
+  --c-on-accent: #13240c; /* dark text on green surfaces */
+  --grad-accent: linear-gradient(180deg, #8cbf60, #6e9a43); /* primary button */
+  --glow-accent: 0 12px 30px -10px rgba(123, 164, 81, 0.65);
+  --c-accent-tint: rgba(123, 164, 81, 0.16); /* tinted icon squares */
+  --c-accent-border: rgba(123, 164, 81, 0.5);
+
+  /* ---- Text ---- */
+  --c-text: #f4f1ee; /* primary headings/labels */
+  --c-text-reading: #f7f4f0; /* serif reading text */
+  --c-text-2: #e8e3dc;
+  --c-text-3: #cfc8bf; /* button text */
+  --c-text-muted: #948d84;
+  --c-text-dim: #7d766e;
+  --c-text-faint: #6f6962;
+  --c-text-fainter: #5c5760;
+
+  /* ---- Warning / "reconnecting" / "blanked" amber ---- */
+  --c-warn: #e0a23a;
+  --c-warn-text: #f0cf94;
+  --c-warn-border: rgba(224, 162, 58, 0.4);
+  --c-warn-tint: rgba(224, 162, 58, 0.12);
+
+  /* ---- Hairlines ---- */
+  --c-line: rgba(255, 255, 255, 0.06);
+  --c-line-2: rgba(255, 255, 255, 0.07);
+  --c-line-3: rgba(255, 255, 255, 0.08);
+  --c-line-strong: rgba(255, 255, 255, 0.1);
+
+  /* ---- Radii ---- */
+  --r-card: 26px;
+  --r-lg: 22px;
+  --r-md: 20px;
+  --r-sm: 16px;
+  --r-xs: 14px;
+  --r-chip: 999px;
+
+  /* ---- Spacing scale ---- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 30px;
+  --s-8: 42px;
+
+  /* ---- Typography ---- */
+  --font-ui: 'Schibsted Grotesk', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Reading size for scripture/lyrics — overridden by font-size body class */
+  --reading-size: 34px;
+
+  /* Touch target floors (Android-Auto philosophy) */
+  --tap-nav: 88px; /* primary slide nav buttons */
+  --tap-primary: 60px;
+  --tap-min: 44px;
+}
+
+/* Reading-font-size preference (persisted to localStorage, applied to <body>) */
+body.font-small {
+  --reading-size: 28px;
+}
+body.font-medium {
+  --reading-size: 34px;
+}
+body.font-large {
+  --reading-size: 42px;
+}
