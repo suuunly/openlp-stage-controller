@@ -128,6 +128,7 @@ Keep `base: './'` regardless — it serves A and B equally well.
 - **Workspace:** `Elim` — ID `cd1e08b9-4065-432f-ac03-d3e8f673f7fd` (pass `workspaceId` on every call).
 - **PRD:** `8e8f34db-84bd-40ff-b162-5c4012307fde` — *PRD — FreeShow Stage Remote Controller* (v0.2, retargeted)
 - **FreeShow format/API knowledge:**
+  - `b3df35f0-490d-45f6-b50d-21596f12f889` — **FreeShow control API: transports, actions, and the three gaps.** Read this before touching `src/lib/`.
   - `1c9a3d51-6aa9-4fa2-a6c1-32e757f611b8` — FreeShow Bible import: json-bible spec + local validation
   - `a6a85914-83f9-4eaa-acce-3f0e47f92e6b` — Converting an OpenLP SQLite Bible to `.fsb`
   - `d96b791f-229c-478d-a286-52622905c38f` — Gotcha: duplicated books in the Faroese Bible
@@ -155,6 +156,7 @@ still stand.
 
 | Task | Fragment ID | Phase | Status |
 |------|-------------|-------|--------|
+| **TASK-00 — FreeShow viability spike** | `1b777be4-fb89-43f3-b50f-669c7bb04ca7` | 0 | 🔲 **Todo — BLOCKS EVERYTHING BELOW. Start here.** |
 | TASK-01 — Project Setup & Settings View       | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | ⚠️ Done vs OpenLP — **rework conn settings (ports, probe, storage keys)** |
 | TASK-02 — Home / Role Selector View           | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | ✅ Done — protocol-agnostic, string changes only |
 | TASK-03 — Real-Time Connection & State        | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | 🔴 **Full rework — transport changes (socket.io vs polling)** |
