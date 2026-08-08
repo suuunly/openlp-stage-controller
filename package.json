@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Stage-facing remote controller for FreeShow — singers & speakers control the big screens. React + Vite. NOTE: integration layer is mid-migration from OpenLP to FreeShow; see CLAUDE.md §10.",
+  "description": "Stage-facing remote controller for FreeShow — singers & speakers control the big screens. React + Vite.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -5,9 +5,13 @@ import { Icon } from './Icon';
 import styles from './ConnectionBanner.module.css';
 
 /**
- * Global "can't reach OpenLP" banner (TASK-03). Shown whenever the app is
- * configured but the WebSocket is not connected — except on the Settings
- * view, where the user is actively fixing the connection.
+ * Global connection banner. Shown whenever the app is configured but not fully
+ * connected — except on Settings, where the user is already fixing it.
+ *
+ * `send-only` is its own state on purpose: FreeShow is answering but the
+ * browser won't let us read the replies (CORS). Every button still works; only
+ * the on-screen read-back is gone. That is worth saying plainly rather than
+ * calling it an outage.
  */
 export function ConnectionBanner(): ReactNode {
   const { connection, settings, view } = useApp();
@@ -16,15 +20,21 @@ export function ConnectionBanner(): ReactNode {
 
   if (!show) return null;
 
-  const reconnecting = connection === 'connecting';
+  const sendOnly = connection === 'send-only';
 
   return (
-    <div className={styles.banner} role="status" aria-live="polite">
-      <Icon name="wifi_off" size={18} />
+    <div
+      className={`${styles.banner} ${sendOnly ? styles.bannerWarn : ''}`}
+      role="status"
+      aria-live="polite"
+    >
+      <Icon name={sendOnly ? 'cast_connected' : 'wifi_off'} size={18} />
       <span>
-        {reconnecting
-          ? 'Reconnecting to OpenLP…'
-          : '⚠️ Cannot reach OpenLP — check WiFi'}
+        {sendOnly
+          ? 'Controls work, but FreeShow’s replies are blocked — no live read-back'
+          : connection === 'connecting'
+            ? 'Connecting to FreeShow…'
+            : '⚠️ Cannot reach FreeShow — check WiFi, or that its API server is on'}
       </span>
     </div>
   );

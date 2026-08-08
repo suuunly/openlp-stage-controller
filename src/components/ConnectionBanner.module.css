@@ -15,3 +15,14 @@
 .banner svg {
   color: var(--c-warn);
 }
+
+/* send-only: degraded but still usable — informational, not an outage */
+.bannerWarn {
+  background: var(--c-surface-2);
+  border-bottom-color: var(--c-line-strong);
+  color: var(--c-text-3);
+}
+
+.bannerWarn svg {
+  color: var(--c-accent-bright);
+}

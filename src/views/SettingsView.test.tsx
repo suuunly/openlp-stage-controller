@@ -27,11 +27,12 @@ describe('Settings → first run', () => {
     await user.click(screen.getByRole('button', { name: /Go to Stage/i }));
 
     expect(localStorage.getItem(STORAGE_KEYS.host)).toBe('10.0.0.5');
+    expect(localStorage.getItem(STORAGE_KEYS.port)).toBe('5506');
     // Home view renders the ELIM wordmark.
     expect(screen.getByText('ELIM')).toBeInTheDocument();
   });
 
-  it('shows a Connected result when Test Connection succeeds', async () => {
+  it('probes FreeShow’s action API when Test Connection succeeds', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue({ ok: true, text: async () => '{}' } as Response);
@@ -45,8 +46,20 @@ describe('Settings → first run', () => {
 
     expect(await screen.findByText('Connected')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://10.0.0.5:4316/api/v2/core/state',
+      'http://10.0.0.5:5506/?action=get_output',
       expect.anything(),
     );
+  });
+
+  it('points at the API server when nothing answers', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByPlaceholderText('192.168.1.50'), '10.0.0.5');
+    await user.click(screen.getByRole('button', { name: /Test Connection/i }));
+
+    expect(
+      await screen.findByText(/FreeShow’s API server is switched on/i),
+    ).toBeInTheDocument();
   });
 });

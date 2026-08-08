@@ -1,12 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
-import { fetchState } from '../lib/api';
+import { runDiagnostics, type DiagnosticsReport } from '../lib/api';
 import { isConfigured } from '../lib/storage';
 import { Icon } from '../components/Icon';
 import type { FontSize, ViewId } from '../lib/types';
 import styles from './SettingsView.module.css';
-
-type TestState = 'idle' | 'testing' | 'ok' | 'fail';
 
 const FONT_OPTIONS: { value: FontSize; label: string }[] = [
   { value: 'small', label: 'Small' },
@@ -24,22 +22,20 @@ const ROLE_CYCLE: { value: ViewId; label: string }[] = [
 
 export function SettingsView(): ReactNode {
   const { settings, updateSettings, commitSettings, navigate } = useApp();
-  const [test, setTest] = useState<TestState>('idle');
+  const [testing, setTesting] = useState(false);
+  const [report, setReport] = useState<DiagnosticsReport | null>(null);
 
   const configured = isConfigured(settings);
 
   async function testConnection() {
-    setTest('testing');
+    setTesting(true);
+    setReport(null);
     try {
-      await fetchState({
-        host: settings.host,
-        port: settings.port,
-        username: settings.username,
-        password: settings.password,
-      });
-      setTest('ok');
-    } catch {
-      setTest('fail');
+      setReport(
+        await runDiagnostics({ host: settings.host, port: settings.port }),
+      );
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -79,11 +75,11 @@ export function SettingsView(): ReactNode {
       <div className={styles.body}>
         {/* ---- Connection ---- */}
         <section>
-          <h2 className={styles.sectionLabel}>OpenLP Connection</h2>
+          <h2 className={styles.sectionLabel}>FreeShow Connection</h2>
 
           <div className={styles.row}>
             <label className={styles.fieldWide}>
-              <span className={styles.fieldLabel}>Server IP</span>
+              <span className={styles.fieldLabel}>FreeShow computer IP</span>
               <input
                 className={`${styles.input} ${styles.mono}`}
                 type="text"
@@ -93,67 +89,66 @@ export function SettingsView(): ReactNode {
                 value={settings.host}
                 onChange={(e) => {
                   updateSettings({ host: e.target.value });
-                  setTest('idle');
+                  setReport(null);
                 }}
               />
             </label>
             <label className={styles.fieldNarrow}>
-              <span className={styles.fieldLabel}>Port</span>
+              <span className={styles.fieldLabel}>API port</span>
               <input
                 className={`${styles.input} ${styles.mono}`}
                 type="text"
                 inputMode="numeric"
-                placeholder="4316"
+                placeholder="5506"
                 value={settings.port}
                 onChange={(e) => {
                   updateSettings({ port: e.target.value });
-                  setTest('idle');
+                  setReport(null);
                 }}
               />
             </label>
           </div>
 
-          <div className={styles.row}>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>
-                Username <span className={styles.muted}>(optional)</span>
-              </span>
-              <input
-                className={styles.input}
-                type="text"
-                placeholder="—"
-                autoComplete="username"
-                value={settings.username}
-                onChange={(e) => updateSettings({ username: e.target.value })}
-              />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>
-                Password <span className={styles.muted}>(optional)</span>
-              </span>
-              <input
-                className={styles.input}
-                type="password"
-                placeholder="—"
-                autoComplete="current-password"
-                value={settings.password}
-                onChange={(e) => updateSettings({ password: e.target.value })}
-              />
-            </label>
-          </div>
+          <p className={styles.hint}>
+            FreeShow’s API server is <strong>off by default</strong>. Turn it on
+            in FreeShow under <em>Settings → Connection</em>, and use the port it
+            shows there (usually 5506).
+          </p>
 
           <div className={styles.testRow}>
             <button
               type="button"
               className={styles.testBtn}
               onClick={testConnection}
-              disabled={test === 'testing'}
+              disabled={testing}
             >
               <Icon name="cable" size={22} />
               <span>Test Connection</span>
             </button>
-            <TestResult state={test} />
+            {testing && (
+              <div className={`${styles.testResult} ${styles.testTesting}`}>
+                <Icon name="progress_activity" size={20} spin />
+                <span>Testing…</span>
+              </div>
+            )}
+            {!testing && report && <TestSummary report={report} />}
           </div>
+
+          {!testing && report && (
+            <ul className={styles.checks}>
+              {report.checks.map((check) => (
+                <li key={check.action} className={styles.check}>
+                  <Icon
+                    name={check.ok ? 'check_circle' : 'wifi_off'}
+                    size={16}
+                    className={check.ok ? styles.checkOk : styles.checkFail}
+                  />
+                  <span className={styles.checkLabel}>{check.label}</span>
+                  <span className={styles.checkDetail}>{check.detail}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <div className={styles.divider} />
@@ -195,14 +190,14 @@ export function SettingsView(): ReactNode {
 
           <div className={styles.settingRow}>
             <div>
-              <div className={styles.settingTitle}>Next-slide preview</div>
-              <div className={styles.settingDesc}>Show the current line under the live song</div>
+              <div className={styles.settingTitle}>On-screen text preview</div>
+              <div className={styles.settingDesc}>Show what’s on the screens under the live song</div>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={settings.nextPreview}
-              aria-label="Next-slide preview"
+              aria-label="On-screen text preview"
               className={`${styles.toggle} ${settings.nextPreview ? styles.toggleOn : ''}`}
               onClick={() => updateSettings({ nextPreview: !settings.nextPreview })}
             >
@@ -221,28 +216,32 @@ export function SettingsView(): ReactNode {
   );
 }
 
-function TestResult({ state }: { state: TestState }): ReactNode {
-  if (state === 'idle') return null;
-  if (state === 'testing') {
+function TestSummary({ report }: { report: DiagnosticsReport }): ReactNode {
+  if (!report.reachable) {
     return (
-      <div className={`${styles.testResult} ${styles.testTesting}`}>
-        <Icon name="progress_activity" size={20} spin />
-        <span>Testing…</span>
+      <div className={`${styles.testResult} ${styles.testFail}`}>
+        <Icon name="wifi_off" size={20} />
+        <span>
+          No answer — check the IP, and that FreeShow’s API server is switched on
+        </span>
       </div>
     );
   }
-  if (state === 'ok') {
+  if (report.corsBlocked) {
     return (
-      <div className={`${styles.testResult} ${styles.testOk}`}>
-        <Icon name="check_circle" size={20} />
-        <span>Connected</span>
+      <div className={`${styles.testResult} ${styles.testTesting}`}>
+        <Icon name="cast_connected" size={20} />
+        <span>
+          FreeShow answered, but this browser blocked the reply — controls will
+          work, live read-back won’t
+        </span>
       </div>
     );
   }
   return (
-    <div className={`${styles.testResult} ${styles.testFail}`}>
-      <Icon name="wifi_off" size={20} />
-      <span>Cannot reach OpenLP — check IP &amp; port</span>
+    <div className={`${styles.testResult} ${styles.testOk}`}>
+      <Icon name="check_circle" size={20} />
+      <span>Connected</span>
     </div>
   );
 }

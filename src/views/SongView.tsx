@@ -13,6 +13,7 @@ export function SongView(): ReactNode {
     navigate,
     serviceItems,
     liveItem,
+    outputText,
     settings,
     goNext,
     goPrev,
@@ -41,11 +42,14 @@ export function SongView(): ReactNode {
 
   const swipe = useSwipe(next, prev);
 
-  const songs = serviceItems.filter((it) => it.plugin === 'songs');
+  const songs = serviceItems.filter((it) => it.kind === 'song');
   const liveId = liveItem?.id ?? null;
   const isLive = (id: string) => liveId !== null && id === liveId;
 
-  const currentLine = liveItem ? liveItem.text.replace(/\s*\n+\s*/g, ' ').trim() : '';
+  // `get_output_slide_text` is purpose-built for the read-along; fall back to
+  // the live slide's own text when the screens are blank or it's unreadable.
+  const readAlong = outputText || liveItem?.text || '';
+  const currentLine = readAlong.replace(/\s*\n+\s*/g, ' ').trim();
 
   return (
     <section className={styles.view}>

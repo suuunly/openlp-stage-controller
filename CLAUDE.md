@@ -2,16 +2,18 @@
 
 > Persistent project memory for Claude Code. Read this first every session.
 
-> ## ⚠️ STATUS: MID-MIGRATION — OpenLP ➜ FreeShow
+> ## ⚠️ STATUS: MIGRATED TO FREESHOW — NOT YET VERIFIED LIVE
 >
-> Elim has **switched from OpenLP to FreeShow**. The UI layer (Phase 1) is built and good;
-> the **integration layer still talks to OpenLP and does not work against FreeShow**.
+> The integration layer now speaks FreeShow's action API, and all five views are built.
+> **Nothing here has been run against a real FreeShow instance.** Every payload shape in
+> `src/lib/api.ts` is normalised defensively precisely because it is a guess.
 >
+> - Jóhann directed the build to go ahead on 2026-08-08 **without** running TASK-00 first.
+>   §10.1's four unknowns (CORS, auth, static hosting, the three API gaps) are therefore
+>   still unanswered — they are now assumptions baked into shipped code, not open questions
+>   on paper. **Settings → Test Connection runs them as live probes; use it on site.**
 > - The repo/folder is still named `openlp-stage-controller` — renaming is deferred, not forgotten.
-> - **§10 is the migration brief.** If you are the agent doing the migration, start there.
-> - Anything in §§2–9 marked 🔴 describes OpenLP behaviour that is now wrong.
-> - **Before writing any code, read §10.0 — the scope of this project is under review and
->   may be cancelled.** Do not start the migration unless Jóhann has confirmed it goes ahead.
+> - §10 is the migration brief and records what was decided and why.
 
 ---
 
@@ -25,10 +27,13 @@ one action per screen, keyboard/HID (foot pedal / clicker) first. **iPad-first**
 Views (one active at a time):
 - **🎤 Song Navigator** — inline list of the service's songs; the live song expands with
   tappable slide-number pills; PREV/NEXT roll across songs; foot-pedal + swipe. *(built)*
-- **📖 Bible Verses** — stacked Book ▸ Chapter ▸ verse hierarchy, 30/70 split,
-  live verse on the right with faded prev/next context. *(placeholder)*
-- **🖼️ Images** — scrollable thumbnail grid, tap to show, "ON SCREEN" badge. *(placeholder)*
-- **📊 Presentation** — current slide, speaker notes, next preview, big nav. *(placeholder)*
+- **📖 Bible Verses** — 30/70 split; free-text reference on the left with a history strip,
+  the live verse read back from the screens on the right. *(built — no browse API, so the
+  Book ▸ Chapter ▸ verse hierarchy is not buildable; see §10.6)*
+- **🖼️ Images** — titled cards, tap to show, "NOW SHOWING" badge. *(built — no thumbnail
+  API, so the grid degrades to titles)*
+- **📊 Presentation** — on-screen slide text, counter, deck picker, big nav. *(built — no
+  notes or thumbnail API)*
 - **⚙️ Settings** — per-device FreeShow connection config. *(built)*
 
 The tech operator keeps full control of FreeShow; this app is **additive**.
@@ -52,8 +57,9 @@ The tech operator keeps full control of FreeShow; this app is **additive**.
 > The behavioral acceptance criteria still apply; the "no bundler" wording in the older task
 > fragments is superseded.
 >
-> 🔴 **Possible new dependency:** FreeShow's WebSocket transport is **socket.io**, not raw
-> `WebSocket`. See §10.4 — REST + polling may be preferable to taking the dependency.
+> ✅ **Resolved (§10.4):** FreeShow's push transport is socket.io, which we did **not** take
+> as a dependency. `src/lib/realtime.ts` polls the REST API every 1s instead — the app almost
+> only sends, and observing the operator a second late costs nothing. Still zero runtime deps.
 
 ---
 
@@ -71,25 +77,24 @@ The tech operator keeps full control of FreeShow; this app is **additive**.
 │   ├── state/AppContext.tsx   # app-wide state: settings, view, connection, live item,
 │   │                          #   service items, blanked + action helpers + the ONE socket
 │   ├── lib/
-│   │   ├── types.ts           # 🔴 Settings, ServiceItem, LiveItem, OpenLpEvent…
-│   │   ├── storage.ts         # 🔴 localStorage load/save, STORAGE_KEYS, font-size body class
-│   │   ├── api.ts             # 🔴 apiFetch() helper, typed actions, normalizers
-│   │   └── websocket.ts       # 🔴 OpenLpSocket: reconnecting WS + parseMessage()
+│   │   ├── types.ts           # Settings, ItemKind, ServiceItem, Project, LiveItem…
+│   │   ├── storage.ts         # localStorage load/save, STORAGE_KEYS, legacy-key migration
+│   │   ├── api.ts             # sendAction() + typed actions, normalizers, runDiagnostics()
+│   │   └── realtime.ts        # FreeShowLink: 1s REST poll, backoff, status callbacks
 │   ├── hooks/
 │   │   ├── useTapGuard.ts     # direction-keyed debounce (iOS ghost double-fire fix)
 │   │   └── useSwipe.ts        # swipe left=next / right=prev
-│   ├── components/            # Icon, AppHeader, ConnectionBanner, Placeholder (+ .module.css)
-│   ├── views/                 # SettingsView, HomeView, SongView (+ .module.css),
-│   │                          #   BibleView / ImagesView / PresentationView (placeholders)
+│   ├── components/            # Icon, AppHeader, ConnectionBanner (+ .module.css)
+│   ├── views/                 # SettingsView, HomeView, SongView, BibleView,
+│   │                          #   ImagesView, PresentationView (+ .module.css)
 │   ├── styles/                # fonts.css, tokens.css, global.css
 │   ├── assets/fonts/          # self-hosted woff2
-│   └── test/setup.ts          # jest-dom, WebSocket mock, per-test storage reset
+│   └── test/setup.ts          # jest-dom, offline-by-default fetch stub, storage reset
 └── e2e/                       # Playwright specs (smoke.spec.ts)
 ```
 
-🔴 = contains OpenLP-specific integration code. **These four `src/lib` files are the whole
-migration surface** — the views, hooks, components, and styles are protocol-agnostic and
-should not need changing beyond type renames.
+**The whole FreeShow surface is those four `src/lib` files** plus the wiring in `AppContext`.
+Views, hooks, components and styles are protocol-agnostic — keep them that way.
 
 ### Commands
 `npm run dev` · `npm run build` · `npm run preview` · `npm run test` (Vitest) ·
@@ -117,9 +122,14 @@ Options, best first — see PRD §7:
 
 Keep `base: './'` regardless — it serves A and B equally well.
 
-> ⚠️ **CORS is an unvalidated blocking risk.** Under OpenLP the app was same-origin, so CORS
-> never came up. With any of the options above the app is cross-origin to FreeShow's API.
-> **Verify this before doing UI work** — see §10.1.
+> ⚠️ **CORS is still unvalidated.** Under OpenLP the app was same-origin, so it never came
+> up; every option above is cross-origin to FreeShow's API. The code no longer *dies* if this
+> goes badly — `sendAction` falls back to opaque `no-cors` requests so commands still land,
+> and the app reports `send-only` (§8) — but live read-back would be lost, which guts the
+> Bible view's reading pane and the song read-along. **Check it on site** (§10.1 #2).
+>
+> Option A stays the recommendation, and if a static-hosting hole is ever found inside
+> FreeShow (§10.1 #4), same-origin hosting moots the whole question.
 
 ---
 
@@ -156,18 +166,19 @@ still stand.
 
 | Task | Fragment ID | Phase | Status |
 |------|-------------|-------|--------|
-| **TASK-00 — FreeShow viability spike** | `1b777be4-fb89-43f3-b50f-669c7bb04ca7` | 0 | 🔲 **Todo — BLOCKS EVERYTHING BELOW. Start here.** |
-| TASK-01 — Project Setup & Settings View       | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | ⚠️ Done vs OpenLP — **rework conn settings (ports, probe, storage keys)** |
-| TASK-02 — Home / Role Selector View           | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | ✅ Done — protocol-agnostic, string changes only |
-| TASK-03 — Real-Time Connection & State        | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | 🔴 **Full rework — transport changes (socket.io vs polling)** |
-| TASK-04 — Song Navigator View                 | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | ⚠️ UI done — **data source remap** |
-| TASK-05 — Bible Verse View                     | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | 🔲 Todo — **rewritten; blocked on picker strategy (no browse API)** |
-| TASK-06 — Images View                          | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | 🔲 Todo — **thumbnails: no known action** |
-| TASK-07 — Presentation View                    | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | 🔲 Todo — **notes + thumbnails at risk; cancellation candidate** |
+| **TASK-00 — FreeShow viability spike** | `1b777be4-fb89-43f3-b50f-669c7bb04ca7` | 0 | ⏭️ **Skipped by decision.** Its unknowns are now assumptions in code — §10.1. Parts A and B4 are still worth doing |
+| TASK-01 — Project Setup & Settings View       | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | ✅ Rebuilt for FreeShow — ports, probe, storage keys, live diagnostics |
+| TASK-02 — Home / Role Selector View           | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | ✅ Done — protocol-agnostic |
+| TASK-03 — Real-Time Connection & State        | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | ✅ Reworked — 1s REST poll (`FreeShowLink`), no socket.io |
+| TASK-04 — Song Navigator View                 | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | ✅ Remapped to projects/shows + `get_output_slide_text` |
+| TASK-05 — Bible Verse View                     | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | ✅ Built via strategy A (free-text). **Preview-before-showing not met** — needs the bundled `.fsb` (§10.6) |
+| TASK-06 — Images View                          | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | ✅ Built as a titled list — no thumbnail action exists (§10.6) |
+| TASK-07 — Presentation View                    | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | ✅ Built without notes or thumbnails — neither is exposed (§10.6) |
 | TASK-08 — Polish, Error States & UX            | `a1dac5cf-9720-42b0-93b1-3465c1ef2f02` | 4 | 🔲 Todo — mostly unaffected |
-| TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — **rewritten; blocked on the hosting decision (§4)** |
+| TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — **blocked on the hosting decision (§4)** |
 
-Order: **§10 migration** → Phase 1 re-verification → Phase 2 (05→06) → Phase 3 (07) → Phase 4 (08) → Phase 5 (09).
+⚠️ **"Done" here means built and green under test, never proven against a live FreeShow.**
+Order from here: verify on site (§10.1) → TASK-08 → TASK-09.
 
 ### ⚠️ Phase 1's "verified live" status is unproven
 
@@ -177,20 +188,15 @@ WS on port **4317** at root path (not the API port + `/ws`), **binary** WS frame
 as `Blob`, unnamed poll-state snapshots instead of `slidecontroller_changed` events, and
 live slides from `/controller/live-items` (plural).
 
-**None of that is in this repository.** Commit `66970dc` exists on neither `main` nor
-`origin`, and no other clone on the machine contains it. `src/lib/websocket.ts` still has
-the original `ws://host:port/ws` + `slidecontroller_changed` plan, and `src/lib/api.ts`
-still probes `/core/state`. **The code here is the pre-verification version.** Either that
-work was done elsewhere and never pushed, or it was lost.
+**None of that was ever in this repository.** Commit `66970dc` exists on neither `main` nor
+`origin`, and no other clone on the machine contains it. That OpenLP code is gone now, so
+only the lesson carries over:
 
-This matters less than it would have — we're leaving OpenLP anyway — but two things carry
-over:
-
-1. **Don't trust the Phase 1 "verified" labels.** The code has not been proven against
-   anything live.
-2. **The lesson generalises.** OpenLP's published docs were wrong about nearly every
-   integration detail, and only live testing caught it. Assume the same of FreeShow's docs:
-   §10.1 exists precisely so this is caught on day one rather than at a Sunday service.
+**OpenLP's published docs were wrong about nearly every integration detail** — WS port, WS
+protocol, live-item endpoint, connection probe, every control endpoint — and only live
+testing caught it. The FreeShow code in this repo is in exactly that pre-verification state.
+§10.1 lists what it assumes; Settings → Test Connection checks the checkable parts in
+seconds. **Do that before a Sunday, not during one.**
 
 ---
 
@@ -211,24 +217,33 @@ over:
 
 ---
 
-## 8. API Pattern — 🔴 CURRENT (OpenLP) vs TARGET (FreeShow)
+## 8. API Pattern — FreeShow
 
-### 🔴 Current implementation (OpenLP — being replaced)
+### Current implementation
 
-All network calls go through **`apiFetch()`** (`src/lib/api.ts`), building
-`http://<host>:<port>/api/v2/<endpoint>` (default port 4316) with optional HTTP Basic auth.
-One app-wide raw `WebSocket` (`ws://<host>:<port>/ws`, `OpenLpSocket`) with exponential
-backoff, handling `slidecontroller_changed` / `service_changed` / `blank_changed`.
+Every network call goes through **`sendAction(action, data)`** (`src/lib/api.ts`), which
+issues `GET http://<host>:5506/?action=…&data=…`. GET is deliberate: with no custom headers
+it is a CORS *simple request*, so it never triggers a preflight, and it is the only form that
+can be replayed opaquely when the browser blocks the response.
 
-**Keep these architectural rules** — they survive the migration intact:
+**The CORS fallback.** A browser reports a CORS rejection and a dead host identically, as a
+bare `TypeError`. So when a *command* fails that way, `sendAction` retries it with
+`mode: 'no-cors'` — the request still reaches FreeShow and executes; only the reply is
+withheld. The app then reports `send-only`: PREV/NEXT/SHOW all work, live read-back doesn't.
+Queries have nothing to salvage and fail loudly. This is what keeps §10.1's unanswered CORS
+question from being fatal.
+
+`src/lib/realtime.ts` runs **one** app-wide `FreeShowLink`, polling `get_output_slide_text`,
+`get_slide` and `get_output` every 1s, with the same 1→2→4…30s backoff the old socket had.
+
+**Architectural rules (unchanged since OpenLP):**
 - Every network call goes through one helper in `src/lib/api.ts`.
-- **One** app-wide socket, started after the app is configured, reconnecting with
-  exponential backoff (1→2→4…max 30s). Views read from `AppContext`; they must **NOT**
-  open their own connection.
+- **One** app-wide connection, owned by `AppContext`, started once configured. Views read
+  from context; they must **NOT** open their own.
 - Normalise defensively at the boundary; views consume clean typed domain objects
-  (`LiveItem`, `ServiceItem`), never raw API shapes.
+  (`LiveItem`, `ServiceItem`, `Project`), never raw API shapes.
 
-### ✅ Target (FreeShow)
+### Transports
 
 Docs: <https://freeshow.app/api>. **The API server is OFF by default** — it must be enabled
 under FreeShow → Settings → Connection. Expect this to be the #1 support question.
@@ -246,12 +261,12 @@ fetch(`http://<ip>:5506?action=${ACTION_ID}&data=${JSON.stringify(data)}`)
 fetch("http://<ip>:5506", { method: "POST", body: JSON.stringify({ action: ACTION_ID, ...data }) })
 ```
 
-Note this is **action-based, not path-based** — `apiFetch(path)` becomes
-`sendAction(action, data)`. That is the single biggest shape change.
+We use the **HTTP GET** form only. socket.io was rejected (§10.4); REST POST would trigger a
+CORS preflight and cannot be replayed with `no-cors`.
 
 ### Endpoint → action mapping
 
-| Purpose | 🔴 OpenLP (current code) | ✅ FreeShow action |
+| Purpose | 🔴 OpenLP (was) | ✅ FreeShow action (is) |
 |---|---|---|
 | Connectivity probe | `GET /api/v2/core/state` | `get_output` (no known dedicated ping) |
 | Next slide | `POST /controller/next-item` | `next_slide` |
@@ -275,6 +290,7 @@ Also available, currently unused: `random_slide`, `name_select_slide`, `change_t
 - All network calls go through the single helper in `src/lib/api.ts`.
 - One active view at a time (conditional render in `App.tsx`).
 - One app-wide socket/poller, owned by `AppContext`.
+- FreeShow payload shapes are **unverified**; normalise every one of them defensively.
 - `localStorage` for settings; `sessionStorage` for ephemeral state (e.g. verse history).
 - Every navigation action must be keyboard-triggerable.
 - No `console.log` in committed code. Keep `npm run typecheck` + `npm run test` green.
@@ -283,9 +299,14 @@ Also available, currently unused: `random_slide`, `name_select_slide`, `change_t
 
 ---
 
-## 10. 🚧 Migration Brief — OpenLP ➜ FreeShow
+## 10. Migration Record — OpenLP ➜ FreeShow
 
-### 10.0 Confirm the project should proceed at all
+> **Done 2026-08-08.** §§10.2–10.5 are history now; §10.1 and §10.6 are live.
+> Jóhann chose to build the full solution rather than run TASK-00 first, so the spike's
+> unknowns became **assumptions in shipped code**. They are listed in §10.1 with what the
+> code assumes — check each one on site.
+
+### 10.0 Whether the project should exist at all — still open
 
 **FreeShow ships remote apps that OpenLP did not** — RemoteShow (slide control, scripture
 browsing across Bibles, project access, output preview) and StageShow (current/next slide
@@ -295,70 +316,76 @@ PRD §1.1 records the decision: **trial RemoteShow + StageShow for one real serv
 If volunteers cope, this project is cancelled. What survives is only:
 role-locked single-purpose screens · 80px+ tap targets · foot-pedal/HID · Faroese UI.
 
-**Do not begin §10.2 until Jóhann confirms the project is going ahead.**
+Building it did not settle this. **The RemoteShow + StageShow trial is still worth running**
+— if volunteers cope with the built-in apps, this app is still the wrong thing to maintain.
 
-### 10.1 Validate the blockers first (cheap, do before any code)
+### 10.1 The unverified assumptions now baked into the code
 
-1. **API reachable + enabled** — turn on the API server in FreeShow, then:
-   `curl "http://<freeshow-ip>:5506?action=get_output"`
-2. **CORS** — serve a scratch page on a different port and run
-   `fetch("http://<ip>:5506?action=get_output")`. A CORS error here **blocks the whole
-   browser-app approach** and needs solving (proxy? bundled local server?) before anything else.
-3. **Auth** — determine whether the API requires a token/password. The current code has
-   HTTP Basic support (`username`/`password` in Settings) that may become dead weight.
-4. **Static hosting** — confirm against the FreeShow source whether custom files can be
-   served from within FreeShow (an `elim-remote` equivalent). If yes, §4 gets much simpler.
+Every one of these is a guess the code makes. **Settings → Test Connection probes 1, 2 and 5
+live and prints what came back** — run it standing next to the FreeShow PC.
+
+| # | Assumption in the code | If it's wrong |
+|---|---|---|
+| 1 | API server on, reachable at `<host>:5506` | Nothing works; Test Connection says so plainly |
+| 2 | **CORS** allows reading responses | App drops to `send-only`: controls work, read-back dies. Banner + Settings both say so. Fixing it properly needs a proxy or packaged app |
+| 3 | **No auth** — `username`/`password` removed from Settings and storage | Re-add auth to `sendAction`; the old Basic-auth code is in git history |
+| 4 | **No static hosting** inside FreeShow — §4 still unresolved | If one exists, same-origin hosting moots #2 entirely |
+| 5 | Payload shapes (`get_projects`, `get_slide`, `get_output_slide_text`) | Normalisers in `api.ts` accept several shapes each; a genuinely new one needs a case added there and nowhere else |
+| 6 | A bare `show` in a project is a **song** (`classifyItem`) | Songs/images/presentations land in the wrong views — one function to fix |
 
 Record the answers in PRD §9 (open questions 1–3).
 
-### 10.2 Code changes, in order
+### 10.2 What changed — ✅ done
 
-The migration is confined to `src/lib/` plus the parts of `AppContext` that wire it up.
+- **`src/lib/api.ts`** — `apiFetch(path)` → `sendAction(action, data)` over GET on 5506,
+  plus the no-cors command fallback, `runDiagnostics()`, and defensive normalisers
+  (`normalizeProjects`, `normalizeLiveItem`, `extractSlideText`, `classifyItem`).
+  `stripHtml` stayed: `get_output_slide_text`'s output is unverified, so HTML is still
+  assumed possible.
+- **`src/lib/websocket.ts` → `src/lib/realtime.ts`** — `OpenLpSocket` became `FreeShowLink`,
+  a 1s poller. Same `start()`/`stop()`/status-callback contract, so `AppContext` barely moved.
+- **`src/lib/types.ts`** — `OpenLpEvent` gone; `ItemKind`, `Project`, `OutputSnapshot` added;
+  `ServiceItem.plugin` → `kind`. `LiveItem` survived nearly intact, as predicted.
+- **`src/lib/storage.ts`** — keys re-prefixed `freeshow_*`, port `4316` → `5506`,
+  `username`/`password` dropped. `migrateLegacyKeys()` carries preferences over and
+  **deliberately discards the OpenLP host** so no device reads as configured against a dead
+  server. It also deletes the stored credentials.
+- **`AppContext`** — projects/active-project model, `outputText`, `send-only` status,
+  scripture actions.
+- **Views** — Settings rebuilt around FreeShow + live diagnostics; Bible, Images and
+  Presentation built for real (§10.6); ConnectionBanner restrung.
 
-1. **`src/lib/api.ts`** — replace path-based `apiFetch(path, options)` with action-based
-   `sendAction(action, data)` against port 5506. Rewrite the typed action wrappers per the
-   §8 mapping table. Keep `stripHtml` only if FreeShow returns HTML — check
-   `get_output_slide_text` first; it may return clean text, in which case delete it.
-2. **`src/lib/websocket.ts`** — `OpenLpSocket` → `FreeShowSocket`. Either take the socket.io
-   dependency or replace with a polling loop (see §10.4). **Keep the reconnect/backoff and
-   status-callback contract identical** so `AppContext` barely changes.
-3. **`src/lib/types.ts`** — `OpenLpEvent`/`OpenLpEventType` → FreeShow equivalents.
-   `ServiceItem` becomes project-shaped. `LiveItem` should survive nearly as-is — it is a
-   good domain abstraction, keep it.
-4. **`src/lib/storage.ts`** — default port `4316` → `5506`; add a second port for the socket
-   (5505) or derive it. Decide whether `username`/`password` stay (depends on §10.1.3).
-   **Bump the storage-key version / migrate** so existing devices don't load an OpenLP host.
-5. **`src/state/AppContext.tsx`** — rewire to the new lib functions. If the socket contract
-   is preserved, this is a small diff.
-6. **`src/views/SettingsView.tsx`** — relabel OpenLP → FreeShow, update port defaults and
-   help text. Add the "is the API server enabled?" hint to the failure path.
-7. **`src/components/ConnectionBanner.tsx`** — user-facing OpenLP strings.
+### 10.3 Tests — ✅ ported, 48 passing (was 17)
 
-### 10.3 Tests to update
+`api.test.ts` (25) · `storage.test.ts` (10, incl. the legacy migration) ·
+`realtime.test.ts` (4, replaces `websocket.test.ts`) · `BibleView.test.tsx` (5) ·
+`SettingsView.test.tsx` (4) · `e2e/smoke.spec.ts` (3 specs, all five views).
+`src/test/setup.ts` no longer mocks `WebSocket`; it stubs `fetch` to reject by default, so
+every test starts "FreeShow is not there" and the poller never touches the network.
 
-`src/lib/api.test.ts` · `src/lib/websocket.test.ts` · `src/lib/storage.test.ts` ·
-`src/views/SettingsView.test.tsx` · `e2e/smoke.spec.ts`.
+### 10.4 Transport — ✅ decided: polling, no socket.io
 
-These encode OpenLP request shapes and will fail loudly — that is intended, they are the
-migration checklist. **Do not delete a test to make it pass**; port it to the FreeShow shape.
-`src/test/setup.ts` mocks `WebSocket` — if you move to socket.io or polling, that mock must change too.
+Confirmed the leaning in the original brief. socket.io would be a runtime dependency against
+the offline-LAN rule (§9); 1s REST polling gives the same practical behaviour because the app
+overwhelmingly *sends*. Swapping to socket.io later touches `realtime.ts` only.
 
-### 10.4 Decision needed: socket.io vs polling
+### 10.5 Cosmetic / naming — still deferred
 
-FreeShow's real-time transport is socket.io, which conflicts with the "no runtime
-dependencies, self-contained offline bundle" rule in §9 (it bundles fine, it is just weight).
+`package.json` `name` and the repo + directory name still say OpenLP. Renaming the repo is
+Jóhann's call — **do not rename the directory or git remote unilaterally.** `index.html`,
+`vite.config.ts` and the e2e comments were updated in passing; `tokens.css` still cites the
+design bundle's filename, which is correct.
 
-- **socket.io** — true push, matches the current architecture, adds a dependency.
-- **REST + polling** (`get_output_slide_text` / `get_slide` at ~1s) — keeps the bundle lean
-  and vanilla, at the cost of up to 1s latency on *observing* operator-driven changes.
-  Note the app's own actions are fire-and-forget POSTs and feel instant regardless.
+### 10.6 Where the three API gaps forced a design change
 
-PRD open question #7. Given the app mostly *sends* and only needs to *observe* when the tech
-operator intervenes, **polling is likely good enough** — but confirm with Jóhann.
+FreeShow exposes no action for browsing bibles, no thumbnails, and no speaker notes. Each
+view degrades honestly and says so in the UI rather than faking it:
 
-### 10.5 Cosmetic / naming (defer until the migration works)
+| View | Design called for | Built instead | Restore it by |
+|---|---|---|---|
+| Bible | Book ▸ Chapter ▸ verse pickers, preview *before* showing | Free-text reference + history strip; the reading pane shows what is **on screen now**, read back via `get_output_slide_text` | Bundling the Victor `.fsb` (~5.7 MB) — TASK-05 option B — or finding RemoteShow's private browse call |
+| Images | 2-column thumbnail grid | Titled cards, same tap target and NOW SHOWING badge | A thumbnail action, if RemoteShow's traffic reveals one |
+| Presentation | Slide thumbnails + speaker notes | On-screen slide text, counter, deck picker, big nav; an explicit "notes aren't available" line | A notes action — until then this view stays the weakest, and is the strongest cancellation candidate |
 
-Still say OpenLP: the repo + directory name, `package.json` `name`, `index.html` meta
-description, `vite.config.ts` header comment, `src/styles/tokens.css` header comment,
-`e2e/smoke.spec.ts` comment. Renaming the repo is Jóhann's call — **do not rename the
-directory or git remote unilaterally.**
+**RemoteShow browses Bibles and renders project items, so private mechanisms exist.**
+Inspecting its network traffic (TASK-00 B4) is still the highest-value unfinished work.

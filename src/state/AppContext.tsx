@@ -9,15 +9,19 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  fetchLiveItem,
-  fetchServiceItems,
-  nextItem,
-  previousItem,
-  setBlank,
-  showItem,
-  showSlide,
+  activateProjectItem,
+  fetchProject,
+  fetchProjects,
+  nextSlide,
+  previousSlide,
+  resetTransportState,
+  scriptureNext,
+  scripturePrevious,
+  selectSlideIndex,
+  startScripture,
+  toggleOutput,
 } from '../lib/api';
-import { OpenLpSocket } from '../lib/websocket';
+import { FreeShowLink } from '../lib/realtime';
 import {
   applyFontSize,
   isConfigured,
@@ -27,6 +31,7 @@ import {
 import type {
   ConnectionStatus,
   LiveItem,
+  Project,
   ServiceItem,
   Settings,
   ViewId,
@@ -43,16 +48,27 @@ interface AppContextValue {
   navigate: (view: ViewId) => void;
 
   connection: ConnectionStatus;
+  /** Every FreeShow project on the machine. */
+  projects: Project[];
+  /** The project being used as "the service" — its items feed every view. */
+  activeProject: Project | null;
+  selectProject: (id: string) => void;
+  /** Items of the active project. */
   serviceItems: ServiceItem[];
   liveItem: LiveItem | null;
+  /** Text currently on the screens (`get_output_slide_text`). */
+  outputText: string;
   blanked: boolean;
 
   refresh: () => void;
   goNext: () => void;
   goPrev: () => void;
   activateItem: (id: string) => void;
-  jumpToSlide: (id: string, slide: number) => void;
+  jumpToSlide: (showId: string | null, slide: number) => void;
   toggleBlank: () => void;
+  showScripture: (reference: string) => void;
+  verseNext: () => void;
+  versePrev: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -65,8 +81,10 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
     isConfigured(initial) ? initial.defaultRole : 'settings',
   );
   const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
-  const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [liveItem, setLiveItem] = useState<LiveItem | null>(null);
+  const [outputText, setOutputText] = useState('');
   const [blanked, setBlanked] = useState(false);
 
   // Apply the reading-font-size class on mount and whenever it changes.
@@ -74,50 +92,84 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
     applyFontSize(settings.fontSize);
   }, [settings.fontSize]);
 
+  const activeProject =
+    projects.find((p) => p.id === activeProjectId) ?? projects[0] ?? null;
+  const serviceItems = activeProject?.items ?? [];
+
+  // Mirrored in a ref so `refresh` can read the current selection without
+  // taking it as a dependency (it is called from the polling link's callbacks).
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  /**
+   * `get_projects` may hand back projects without their items, so the chosen
+   * project is topped up with `get_project` when it comes back empty.
+   */
   const refresh = useCallback(() => {
-    fetchServiceItems()
-      .then(setServiceItems)
-      .catch(() => {
-        /* offline — banner already shows it */
-      });
-    fetchLiveItem()
-      .then((li) => {
-        if (li) setLiveItem(li);
-      })
-      .catch(() => {
-        /* offline */
-      });
+    void (async () => {
+      let list: Project[];
+      try {
+        list = await fetchProjects();
+      } catch {
+        return; // offline — the banner already says so
+      }
+      setProjects(list);
+
+      const prev = activeIdRef.current;
+      const chosen =
+        (prev ? list.find((p) => p.id === prev) : undefined) ??
+        list.find((p) => p.active) ??
+        list[0];
+      activeIdRef.current = chosen?.id ?? null;
+      setActiveProjectId(chosen?.id ?? null);
+
+      if (chosen && chosen.items.length === 0) {
+        try {
+          const full = await fetchProject(chosen.id);
+          if (full) {
+            setProjects((ps) => ps.map((p) => (p.id === full.id ? full : p)));
+          }
+        } catch {
+          /* leave the project item-less; the view shows its empty state */
+        }
+      }
+    })();
   }, []);
 
-  // One app-wide WebSocket, re-established when the host/port changes.
+  // One app-wide connection, re-established when the host/port changes.
   const configured = isConfigured(settings);
   useEffect(() => {
     if (!configured) return;
-    const socket = new OpenLpSocket({
+    resetTransportState();
+    let alive = true;
+    let previous: ConnectionStatus = 'disconnected';
+    const isUp = (s: ConnectionStatus) => s === 'connected' || s === 'send-only';
+
+    const link = new FreeShowLink({
       onStatus: (status) => {
+        if (!alive) return;
+        // Reload the service whenever we come back from a bad state.
+        if (isUp(status) && !isUp(previous)) refresh();
+        previous = status;
         setConnection(status);
-        if (status === 'connected') refresh();
       },
-      onEvent: (event) => {
-        switch (event.type) {
-          case 'slidecontroller_changed':
-            fetchLiveItem()
-              .then((li) => setLiveItem(li))
-              .catch(() => undefined);
-            break;
-          case 'service_changed':
-            refresh();
-            break;
-          case 'blank_changed': {
-            const display = event.data.display;
-            setBlanked(display !== undefined && display !== 'show');
-            break;
-          }
-        }
+      onSnapshot: ({ text, live }) => {
+        if (!alive) return;
+        setOutputText(text);
+        setLiveItem((prev) => live ?? prev);
+      },
+      onOutputActive: (active) => {
+        if (alive && active !== null) setBlanked(!active);
       },
     });
-    socket.start();
-    return () => socket.stop();
+    link.start();
+    return () => {
+      alive = false;
+      link.stop();
+      setConnection('disconnected');
+    };
   }, [configured, settings.host, settings.port, refresh]);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
@@ -134,25 +186,46 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
 
   const navigate = useCallback((next: ViewId) => setView(next), []);
 
+  const selectProject = useCallback((id: string) => {
+    activeIdRef.current = id;
+    setActiveProjectId(id);
+    void (async () => {
+      try {
+        const full = await fetchProject(id);
+        if (full) setProjects((ps) => ps.map((p) => (p.id === id ? full : p)));
+      } catch {
+        /* keep whatever we already had */
+      }
+    })();
+  }, []);
+
   const goNext = useCallback(() => {
-    nextItem().catch(() => undefined);
+    nextSlide().catch(() => undefined);
   }, []);
   const goPrev = useCallback(() => {
-    previousItem().catch(() => undefined);
+    previousSlide().catch(() => undefined);
   }, []);
   const activateItem = useCallback((id: string) => {
-    showItem(id).catch(() => undefined);
+    activateProjectItem(id).catch(() => undefined);
   }, []);
-  const jumpToSlide = useCallback((id: string, slide: number) => {
-    showSlide(id, slide).catch(() => undefined);
+  const jumpToSlide = useCallback((showId: string | null, slide: number) => {
+    selectSlideIndex(slide, showId ?? undefined).catch(() => undefined);
   }, []);
   const toggleBlank = useCallback(() => {
-    // Optimistic toggle (Android-Auto: instant feedback); WS confirms.
+    // Optimistic toggle (Android-Auto: instant feedback); the poll confirms.
     setBlanked((prev) => {
-      const next = !prev;
-      setBlank(next ? 'blank' : 'show').catch(() => undefined);
-      return next;
+      toggleOutput().catch(() => undefined);
+      return !prev;
     });
+  }, []);
+  const showScripture = useCallback((reference: string) => {
+    startScripture(reference).catch(() => undefined);
+  }, []);
+  const verseNext = useCallback(() => {
+    scriptureNext().catch(() => undefined);
+  }, []);
+  const versePrev = useCallback(() => {
+    scripturePrevious().catch(() => undefined);
   }, []);
 
   const value = useMemo<AppContextValue>(
@@ -163,8 +236,12 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       view,
       navigate,
       connection,
+      projects,
+      activeProject,
+      selectProject,
       serviceItems,
       liveItem,
+      outputText,
       blanked,
       refresh,
       goNext,
@@ -172,6 +249,9 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       activateItem,
       jumpToSlide,
       toggleBlank,
+      showScripture,
+      verseNext,
+      versePrev,
     }),
     [
       settings,
@@ -180,8 +260,12 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       view,
       navigate,
       connection,
+      projects,
+      activeProject,
+      selectProject,
       serviceItems,
       liveItem,
+      outputText,
       blanked,
       refresh,
       goNext,
@@ -189,6 +273,9 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       activateItem,
       jumpToSlide,
       toggleBlank,
+      showScripture,
+      verseNext,
+      versePrev,
     ],
   );
 

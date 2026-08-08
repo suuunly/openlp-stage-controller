@@ -1,30 +1,23 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
-// jsdom has no WebSocket. Provide an inert mock so the app-wide socket can be
-// constructed in tests without throwing or scheduling reconnect loops.
-class MockWebSocket {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSING = 2;
-  static readonly CLOSED = 3;
-  readyState = MockWebSocket.CONNECTING;
-  onopen: ((ev: unknown) => void) | null = null;
-  onclose: ((ev: unknown) => void) | null = null;
-  onmessage: ((ev: unknown) => void) | null = null;
-  onerror: ((ev: unknown) => void) | null = null;
-  constructor(public url: string) {}
-  send(): void {}
-  close(): void {
-    this.readyState = MockWebSocket.CLOSED;
-  }
-}
-vi.stubGlobal('WebSocket', MockWebSocket);
+beforeEach(() => {
+  // Default every test to "FreeShow is not there". A `TypeError` is exactly
+  // what a browser raises for an unreachable host or a CORS rejection, so this
+  // exercises the same path the real app takes when offline — and stops the
+  // polling link from making real network calls. Tests that need a live
+  // FreeShow stub their own fetch over the top.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
+  );
+});
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
   sessionStorage.clear();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });

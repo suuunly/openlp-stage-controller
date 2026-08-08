@@ -15,7 +15,7 @@ const ROLES: Role[] = [
   { view: 'songs', icon: 'mic', title: 'Song Navigator', desc: 'For singers — navigate lyrics' },
   { view: 'bible', icon: 'menu_book', title: 'Bible Verses', desc: 'For speakers — show scripture' },
   { view: 'images', icon: 'image', title: 'Images', desc: 'For speakers — show service slides' },
-  { view: 'presentation', icon: 'slideshow', title: 'Presentation', desc: 'For speakers — slides & notes' },
+  { view: 'presentation', icon: 'slideshow', title: 'Presentation', desc: 'For speakers — slides & big nav' },
 ];
 
 export function HomeView(): ReactNode {
