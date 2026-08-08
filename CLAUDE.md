@@ -131,8 +131,11 @@ Keep `base: './'` regardless — it serves A and B equally well.
   - `1c9a3d51-6aa9-4fa2-a6c1-32e757f611b8` — FreeShow Bible import: json-bible spec + local validation
   - `a6a85914-83f9-4eaa-acce-3f0e47f92e6b` — Converting an OpenLP SQLite Bible to `.fsb`
   - `d96b791f-229c-478d-a286-52622905c38f` — Gotcha: duplicated books in the Faroese Bible
-- 🔴 **Superseded:** `7331ff8d-a3e7-47d6-a317-fb67c2354f67` — *OpenLP REST API Reference*.
-  Historical only. **Do not integrate against it.**
+- 🔴 **Superseded — do not integrate against either:**
+  - `bcb97feb-f724-4f0e-bb7b-f7c7c0964135` — *OpenLP 3 REST/WebSocket API — VERIFIED Live*.
+    The more accurate of the two, and the one the (missing) Phase 1 verification was based on.
+  - `7331ff8d-a3e7-47d6-a317-fb67c2354f67` — *OpenLP REST API Reference*. Unverified and
+    wrong on several points; corrected by the fragment above, then obsoleted entirely.
 - **Design source:** Claude Design bundle "OpenLP Stage Controller" (Elim green `#7ba451`,
   Schibsted Grotesk + Newsreader). Still the source of truth for **visual design** — the
   design intent is unaffected by the backend change.
@@ -145,23 +148,47 @@ Keep `base: './'` regardless — it serves A and B equally well.
 
 ## 6. Task Index
 
-🔴 **All task fragments were written against OpenLP and still cite OpenLP endpoints.**
-Their *behavioural* acceptance criteria (what the user sees and can do) remain valid; their
-*API* sections do not. TASK-05 in particular specifies OpenLP Bible endpoints throughout.
+All nine task fragments were **updated for FreeShow on 2026-08-08**. Each now opens with a
+migration callout stating what survives and what changed, and their API sections cite
+FreeShow actions. Their *behavioural* acceptance criteria were always protocol-agnostic and
+still stand.
 
 | Task | Fragment ID | Phase | Status |
 |------|-------------|-------|--------|
-| TASK-01 — Project Setup & Settings View      | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | 🚧 Impl done — **needs rework for FreeShow conn settings** |
-| TASK-02 — Home / Role Selector View          | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | 🚧 Impl done — protocol-agnostic, likely unaffected |
-| TASK-03 — WebSocket Connection & Real-Time   | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | 🚧 Impl done — **needs full rework (socket.io / polling)** |
-| TASK-04 — Song Navigator View                | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | 🚧 Impl done — **data source changes** |
-| TASK-05 — Bible Verse View                    | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | 🔲 Todo — **rewrite: `start_scripture` takes a plain reference string** |
-| TASK-06 — Images View                         | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | 🔲 Todo |
-| TASK-07 — Presentation View                   | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | 🔲 Todo |
-| TASK-08 — Polish, Error States & UX           | `a1dac5cf-9720-42b0-93b1-3465c1ef2f02` | 4 | 🔲 Todo |
-| TASK-09 — GitHub Distribution & Setup Guide   | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — **rewrite: deployment story changed (§4)** |
+| TASK-01 — Project Setup & Settings View       | `28989691-96bb-40a2-9a77-7f0cb5e51599` | 1 | ⚠️ Done vs OpenLP — **rework conn settings (ports, probe, storage keys)** |
+| TASK-02 — Home / Role Selector View           | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | ✅ Done — protocol-agnostic, string changes only |
+| TASK-03 — Real-Time Connection & State        | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | 🔴 **Full rework — transport changes (socket.io vs polling)** |
+| TASK-04 — Song Navigator View                 | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | ⚠️ UI done — **data source remap** |
+| TASK-05 — Bible Verse View                     | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | 🔲 Todo — **rewritten; blocked on picker strategy (no browse API)** |
+| TASK-06 — Images View                          | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | 🔲 Todo — **thumbnails: no known action** |
+| TASK-07 — Presentation View                    | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | 🔲 Todo — **notes + thumbnails at risk; cancellation candidate** |
+| TASK-08 — Polish, Error States & UX            | `a1dac5cf-9720-42b0-93b1-3465c1ef2f02` | 4 | 🔲 Todo — mostly unaffected |
+| TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — **rewritten; blocked on the hosting decision (§4)** |
 
 Order: **§10 migration** → Phase 1 re-verification → Phase 2 (05→06) → Phase 3 (07) → Phase 4 (08) → Phase 5 (09).
+
+### ⚠️ Phase 1's "verified live" status is unproven
+
+TASK-01/02/03/04 were marked *"✅ Done — verified live against OpenLP 3 on 2026-06-28
+(commit `66970dc`)"*, and recorded real corrections: probe `/core/state` → `/core/system`,
+WS on port **4317** at root path (not the API port + `/ws`), **binary** WS frames delivered
+as `Blob`, unnamed poll-state snapshots instead of `slidecontroller_changed` events, and
+live slides from `/controller/live-items` (plural).
+
+**None of that is in this repository.** Commit `66970dc` exists on neither `main` nor
+`origin`, and no other clone on the machine contains it. `src/lib/websocket.ts` still has
+the original `ws://host:port/ws` + `slidecontroller_changed` plan, and `src/lib/api.ts`
+still probes `/core/state`. **The code here is the pre-verification version.** Either that
+work was done elsewhere and never pushed, or it was lost.
+
+This matters less than it would have — we're leaving OpenLP anyway — but two things carry
+over:
+
+1. **Don't trust the Phase 1 "verified" labels.** The code has not been proven against
+   anything live.
+2. **The lesson generalises.** OpenLP's published docs were wrong about nearly every
+   integration detail, and only live testing caught it. Assume the same of FreeShow's docs:
+   §10.1 exists precisely so this is caught on day one rather than at a Sunday service.
 
 ---
 
