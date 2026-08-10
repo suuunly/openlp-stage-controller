@@ -92,6 +92,16 @@ export const selectShow = (showId: string, index = 0): void =>
     s.api('index_select_slide', { showId, index });
   });
 
+/**
+ * Put a media file on screen.
+ *
+ * Images are **not** shows: `id_select_project` makes FreeShow complain
+ * "Received trigger to start slide, but no show active". RemoteShow uses
+ * `play_media` with the file path and its type.
+ */
+export const playMedia = (path: string, type: 'image' | 'video' = 'image'): void =>
+  fire((s) => s.api('play_media', { path, data: { type } }));
+
 export const clearOutput = (): void => fire((s) => s.api('clear_all'));
 export const clearSlide = (): void => fire((s) => s.api('clear_slide'));
 

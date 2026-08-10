@@ -25,6 +25,7 @@ import {
   requestShow,
   scriptureNext,
   scripturePrevious,
+  playMedia,
   selectShow,
   selectSlide,
   startScripture,
@@ -78,6 +79,8 @@ interface AppContextValue {
   goPrev: () => void;
   /** Put a show on screen (the SHOW + index_select_slide two-step). */
   activateItem: (id: string) => void;
+  /** Put a media file on screen. Images are not shows — see `playMedia`. */
+  showMedia: (path: string, type?: 'image' | 'video') => void;
   jumpToSlide: (showId: string | null, slide: number) => void;
   /** `reference` is FreeShow's numeric `book.chapter.verse` form. */
   showScripture: (reference: string, bibleId?: string) => void;
@@ -268,6 +271,9 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
     pendingShow.current = id;
     selectShow(id);
   }, []);
+  const showMedia = useCallback((path: string, type: 'image' | 'video' = 'image') => {
+    playMedia(path, type);
+  }, []);
   const jumpToSlide = useCallback((showId: string | null, slide: number) => {
     if (showId) selectSlide(showId, slide);
   }, []);
@@ -299,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       goNext,
       goPrev,
       activateItem,
+      showMedia,
       jumpToSlide,
       showScripture,
       verseNext,
@@ -324,6 +331,7 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       goNext,
       goPrev,
       activateItem,
+      showMedia,
       jumpToSlide,
       showScripture,
       verseNext,

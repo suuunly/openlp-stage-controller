@@ -66,7 +66,8 @@ describe('Presentation view', () => {
     });
 
     expect(screen.queryByText(/Amazing grace, how sweet/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Something else is on the screens/)).toBeInTheDocument();
+    // With no deck of its own live, the view falls back to the deck picker.
+    expect(screen.getByRole('button', { name: /Sermon/ })).toBeInTheDocument();
   });
 
   it('renders the live slide once one of its own decks is live', () => {
@@ -83,10 +84,8 @@ describe('Presentation view', () => {
 
   it('lists a show once even when the project contains it twice', () => {
     renderPresentation();
-    // Two distinct decks, so the picker renders — and 'Sermon' appears once
-    // despite the project listing it twice.
-    expect(screen.getAllByRole('button', { name: 'Sermon' })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Notices' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Sermon/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Notices/ })).toHaveLength(1);
   });
 });
 
@@ -100,13 +99,14 @@ describe('keyboard navigation', () => {
     });
 
     // Browsers synthesise a click from Enter on a button. A global handler that
-    // also treats Enter as "next" fires both — the deck goes live on slide 2.
-    screen.getByRole('button', { name: 'Notices' }).focus();
+    // also treats Enter as "next" would fire both — advancing a slide while the
+    // user was only activating a control.
+    screen.getByRole('button', { name: /Change/ }).focus();
     await user.keyboard('{Enter}');
 
-    const sent = MockWebSocket.last().outbound().map((m) => m.channel);
-    expect(sent).toContain('SHOW');
-    expect(sent).not.toContain('API:next_slide');
+    expect(MockWebSocket.last().outbound().map((m) => m.channel)).not.toContain(
+      'API:next_slide',
+    );
   });
 
   it('still advances from a focused control on the pedal keys', async () => {
@@ -114,7 +114,7 @@ describe('keyboard navigation', () => {
     renderPresentation();
 
     // Arrow keys don't activate a button, so the pedal must keep working.
-    screen.getByRole('button', { name: 'Notices' }).focus();
+    screen.getByRole('button', { name: /Sermon/ }).focus();
     await user.keyboard('{ArrowRight}');
 
     expect(MockWebSocket.last().outbound().map((m) => m.channel)).toContain(
@@ -135,9 +135,11 @@ describe('SHOW reply correlation', () => {
     });
     expect(screen.getByText('Rooted and Built Up')).toBeInTheDocument();
 
-    // Tap deck 2. selectShow() sends SHOW unconditionally, so a reply arrives
-    // even though deck 2 is not cached — it must not land under deck 1.
-    await user.click(screen.getByRole('button', { name: 'Notices' }));
+    // Tap deck 2 via the picker. selectShow() sends SHOW unconditionally, so a
+    // reply arrives even though deck 2 is not cached — it must not land under
+    // deck 1.
+    await user.click(screen.getByRole('button', { name: /Change/ }));
+    await user.click(screen.getByRole('button', { name: /Notices/ }));
     act(() => {
       socket.channel('SHOW', showPayload('Notices', 'Coffee after the service'));
       socket.channel('OUT_DATA', { slide: { id: 'deck2', layout: 'l1', index: 0 } });
@@ -146,7 +148,8 @@ describe('SHOW reply correlation', () => {
 
     // Back to deck 1 — already cached, so nothing would re-fetch it if its
     // slides had been overwritten.
-    await user.click(screen.getByRole('button', { name: 'Sermon' }));
+    await user.click(screen.getByRole('button', { name: /Change/ }));
+    await user.click(screen.getByRole('button', { name: /Sermon/ }));
     act(() => {
       socket.channel('SHOW', showPayload('Sermon', 'Rooted and Built Up'));
       socket.channel('OUT_DATA', { slide: { id: 'deck1', layout: 'l1', index: 0 } });

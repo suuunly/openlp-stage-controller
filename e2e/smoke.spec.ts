@@ -34,10 +34,8 @@ test('every role opens and shows its own empty state', async ({ page }) => {
   await page.getByRole('button', { name: 'Back to home' }).click();
 
   await page.getByRole('button', { name: /Presentation/i }).click();
+  // With no deck live the view shows its picker, which is empty here.
   await expect(page.getByText('No presentations in this service')).toBeVisible();
-  // Notes come from get_show's per-slide `notes`; with nothing live there are
-  // none to show yet.
-  await expect(page.getByText('No notes for this slide')).toBeVisible();
 });
 
 test('the Bible view refuses a reference it cannot resolve', async ({ page }) => {

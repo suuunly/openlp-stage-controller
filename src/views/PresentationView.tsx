@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { useTapGuard } from '../hooks/useTapGuard';
 import { useSwipe } from '../hooks/useSwipe';
@@ -9,36 +9,28 @@ import { Icon } from '../components/Icon';
 import styles from './PresentationView.module.css';
 
 /**
- * Presentation view.
+ * Presentation view — a presenter console.
  *
- * Speaker notes come from `get_show`'s per-slide `notes` — they are not in the
- * published API, which is why TASK-07 recorded them as impossible.
+ * Two states: a grid to choose a deck, then PowerPoint's presenter layout —
+ * the live slide large on the left, the next one and the speaker's notes down
+ * the right.
  *
- * The slide itself is *drawn*, not fetched: FreeShow has no slide bitmap, so
- * `SlidePreview` renders it from its own layout data. Text remains the fallback
- * when a slide carries no usable geometry.
+ * Notes come from `get_show`'s per-slide `notes`, which the published API
+ * doesn't mention, and the slides are *drawn* by `SlidePreview` because
+ * FreeShow has no slide bitmap to send. Text remains the fallback when a slide
+ * carries no usable geometry.
  */
 export function PresentationView(): ReactNode {
-  const {
-    serviceItems,
-    liveItem,
-    outputText,
-    activeProject,
-    activateItem,
-    goNext,
-    goPrev,
-  } = useApp();
+  const { serviceItems, liveItem, activeProject, activateItem, goNext, goPrev } = useApp();
 
   const guard = useTapGuard();
   const next = useCallback(() => guard('next', goNext), [guard, goNext]);
   const prev = useCallback(() => guard('prev', goPrev), [guard, goPrev]);
-
   useNavKeys(next, prev);
-
   const swipe = useSwipe(next, prev);
 
-  // A project can list the same show twice; duplicate React keys and duplicate
-  // chips both follow from taking the list at face value.
+  // A project can list the same show twice; duplicate cards and duplicate React
+  // keys both follow from taking the list at face value.
   const decks = serviceItems.filter(
     (it, i, all) => it.kind === 'presentation' && all.findIndex((o) => o.id === it.id) === i,
   );
@@ -46,82 +38,115 @@ export function PresentationView(): ReactNode {
   const current = decks.find((d) => d.id === liveId) ?? null;
 
   /**
-   * Only mirror the output when what's live is actually one of these decks.
-   * Otherwise a song or a bible verse renders here as though it were the
-   * current presentation — which on stage is worse than showing nothing.
+   * Only mirror the output when what's live is one of these decks — otherwise a
+   * song or bible verse renders here as though it were the current
+   * presentation, which on stage is worse than showing nothing.
    */
   const live = current !== null;
-  const slideText = live ? outputText.trim() || liveItem?.text.trim() || '' : '';
+
+  // The grid shows until a deck is live, and whenever the user asks for it back.
+  const [browsing, setBrowsing] = useState(false);
+  useEffect(() => {
+    if (live) setBrowsing(false);
+  }, [live]);
+  const showGrid = browsing || !live;
+
   const counter =
     live && liveItem && liveItem.total > 0
       ? `${liveItem.slide + 1} / ${liveItem.total}`
       : null;
+  const slideText = live ? (liveItem?.text.trim() ?? '') : '';
 
   return (
     <section className={styles.view}>
       <AppHeader
         icon="slideshow"
-        title={current?.title ?? 'Presentation'}
+        title={current && !showGrid ? current.title : 'Presentation'}
         subtitle={activeProject?.name ?? 'Slides on the big screens'}
         right={
-          counter ? <span className={styles.counter}>{counter}</span> : undefined
+          <div className={styles.headerRight}>
+            {counter && !showGrid && <span className={styles.counter}>{counter}</span>}
+            {decks.length > 1 && !showGrid && (
+              <button
+                type="button"
+                className={styles.change}
+                onClick={() => setBrowsing(true)}
+              >
+                <Icon name="unfold_more" size={18} />
+                <span>Change</span>
+              </button>
+            )}
+          </div>
         }
       />
 
-      {decks.length > 0 && (
-        <div className={styles.picker} role="group" aria-label="Choose a presentation">
-          {decks.map((deck) => (
-            <button
-              key={deck.id}
-              type="button"
-              className={`${styles.chip} ${deck.id === liveId ? styles.chipOn : ''}`}
-              onClick={() => activateItem(deck.id)}
-            >
-              {deck.title}
-            </button>
-          ))}
+      {showGrid ? (
+        <div className={styles.grid}>
+          {decks.length === 0 ? (
+            <div className={styles.empty}>
+              <Icon name="slideshow" size={40} />
+              <p className={styles.emptyTitle}>No presentations in this service</p>
+              <p className={styles.emptyDesc}>
+                Ask the tech team to add one to the FreeShow project.
+              </p>
+            </div>
+          ) : (
+            decks.map((deck) => (
+              <button
+                key={deck.id}
+                type="button"
+                className={`${styles.card} ${deck.id === liveId ? styles.cardLive : ''}`}
+                onClick={() => {
+                  activateItem(deck.id);
+                  setBrowsing(false);
+                }}
+              >
+                <span className={styles.cardIcon}>
+                  <Icon name="slideshow" size={30} />
+                </span>
+                <span className={styles.cardLabel}>{deck.title}</span>
+                {deck.id === liveId && <span className={styles.badge}>✓ LIVE</span>}
+              </button>
+            ))
+          )}
         </div>
-      )}
-
-      <div className={styles.stage} {...swipe}>
-        {decks.length === 0 ? (
-          <div className={styles.empty}>
-            <Icon name="slideshow" size={40} />
-            <p className={styles.emptyTitle}>No presentations in this service</p>
-            <p className={styles.emptyDesc}>
-              Ask the tech team to add one to the FreeShow project.
-            </p>
-          </div>
-        ) : live && liveItem && liveItem.items.length > 0 ? (
-          <div className={styles.preview}>
-            <SlidePreview items={liveItem.items} label={`Slide ${liveItem.slide + 1}`} />
-            {liveItem.nextItems.length > 0 && (
-              <div className={styles.nextWrap}>
-                <span className={styles.nextLabel}>Next</span>
-                <SlidePreview
-                  items={liveItem.nextItems}
-                  className={styles.nextPreview}
-                  label="Next slide"
-                />
-              </div>
+      ) : (
+        <div className={styles.console} {...swipe}>
+          <div className={styles.main}>
+            {liveItem && liveItem.items.length > 0 ? (
+              <SlidePreview
+                items={liveItem.items}
+                label={`Slide ${liveItem.slide + 1}`}
+                className={styles.fit}
+              />
+            ) : (
+              <p className={styles.slide} style={{ fontSize: 'var(--reading-size)' }}>
+                {slideText || 'Nothing on the screens yet'}
+              </p>
             )}
           </div>
-        ) : slideText ? (
-          <p className={styles.slide} style={{ fontSize: 'var(--reading-size)' }}>
-            {slideText}
-          </p>
-        ) : (
-          <p className={styles.placeholder}>
-            {liveItem
-              ? 'Something else is on the screens — tap a presentation to take over'
-              : 'Nothing on the screens yet'}
-          </p>
-        )}
-      </div>
 
-      <p className={styles.notes}>
-        {live && liveItem?.notes?.trim() ? liveItem.notes : 'No notes for this slide'}
-      </p>
+          <aside className={styles.side}>
+            <div className={styles.nextBlock}>
+              <span className={styles.sideLabel}>Next</span>
+              {liveItem && liveItem.nextItems.length > 0 ? (
+                <SlidePreview items={liveItem.nextItems} label="Next slide" />
+              ) : (
+                <p className={styles.sideEmpty}>
+                  {liveItem?.nextText || 'End of the presentation'}
+                </p>
+              )}
+            </div>
+
+            <div className={styles.notesBlock}>
+              <span className={styles.sideLabel}>Notes</span>
+              <p className={styles.notes}>
+                {liveItem?.notes?.trim() || 'No notes for this slide'}
+              </p>
+            </div>
+          </aside>
+        </div>
+      )}
 
       <footer className={styles.nav}>
         <button type="button" className={styles.navPrev} onClick={prev}>

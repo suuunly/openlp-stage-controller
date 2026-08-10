@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { fetchThumbnail } from '../lib/api';
 import { downscaleDataUrl } from '../lib/downscale';
@@ -19,13 +19,22 @@ import styles from './ImagesView.module.css';
  * for choosing an image — but switchable when the network is poor.
  */
 export function ImagesView(): ReactNode {
-  const { serviceItems, liveItem, activateItem, activeProject, connection, settings } =
-    useApp();
+  const { serviceItems, activeProject, connection, settings, showMedia } = useApp();
 
-  const images = serviceItems.filter((it) => it.kind === 'image');
+  // Memoised by id: `serviceItems.filter(...)` is a fresh array every render,
+  // and an unstable dependency restarted the thumbnail loop on each arrival —
+  // which is why only every other image ended up with a picture.
+  const images = useMemo(
+    () => serviceItems.filter((it) => it.kind === 'image'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [serviceItems.map((it) => `${it.kind}:${it.id}`).join('|')],
+  );
   const thumbs = useThumbnails(images, connection, settings.imagePreviews);
-  const liveId = liveItem?.id ?? null;
-  const showing = images.find((it) => it.id === liveId) ?? null;
+
+  // Images aren't shows, so FreeShow's output never points back at one. The
+  // badge tracks what this device last sent, and says so.
+  const [lastSent, setLastSent] = useState<string | null>(null);
+  const showing = images.find((it) => it.id === lastSent) ?? null;
 
   return (
     <section className={styles.view}>
@@ -47,13 +56,16 @@ export function ImagesView(): ReactNode {
         )}
 
         {images.map((item) => {
-          const live = item.id === liveId;
+          const live = item.id === lastSent;
           return (
             <button
               key={item.id}
               type="button"
               className={`${styles.card} ${live ? styles.cardLive : ''}`}
-              onClick={() => activateItem(item.id)}
+              onClick={() => {
+                showMedia(item.path ?? item.id);
+                setLastSent(item.id);
+              }}
               aria-current={live}
             >
               <span className={styles.thumb}>
@@ -64,7 +76,7 @@ export function ImagesView(): ReactNode {
                 )}
               </span>
               <span className={styles.label}>{item.title}</span>
-              {live && <span className={styles.badge}>✓ NOW SHOWING</span>}
+              {live && <span className={styles.badge}>✓ SENT</span>}
             </button>
           );
         })}
@@ -72,7 +84,7 @@ export function ImagesView(): ReactNode {
 
       <footer className={styles.status}>
         <span className={styles.statusText}>
-          {showing ? `Now showing: ${showing.title}` : 'Nothing from this list is on screen'}
+          {showing ? `Last sent: ${showing.title}` : 'Tap an image to put it on the screens'}
         </span>
         <span className={styles.note}>
           {settings.imagePreviews

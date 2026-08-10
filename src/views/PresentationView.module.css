@@ -6,6 +6,11 @@
   background: var(--c-bg);
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
 .counter {
   padding: 8px 16px;
   border-radius: var(--r-chip);
@@ -15,83 +20,166 @@
   font-size: 17px;
   white-space: nowrap;
 }
-
-.picker {
-  flex: none;
+.change {
   display: flex;
+  align-items: center;
   gap: var(--s-2);
-  padding: var(--s-4) var(--s-7) 0;
-  overflow-x: auto;
-}
-.chip {
-  flex: none;
   min-height: var(--tap-min);
-  padding: 0 18px;
+  padding: 0 16px;
   border-radius: var(--r-chip);
   border: 1px solid var(--c-line-3);
   background: var(--c-surface-2);
   color: var(--c-text-3);
   font-weight: 600;
-  font-size: 16px;
-  white-space: nowrap;
-  transition: all 0.12s;
+  font-size: 15px;
 }
-.chip:active {
-  transform: scale(0.96);
-}
-.chipOn {
-  border-color: var(--c-accent-border);
-  background: var(--c-accent-tint);
-  color: var(--c-accent-bright);
+.change:hover {
+  background: var(--c-surface-hover);
 }
 
-.stage {
+/* ---- deck picker ---- */
+.grid {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: flex;
-  padding: var(--s-6) var(--s-7);
-  background: var(--grad-verse);
-  margin: var(--s-4) var(--s-7) 0;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--c-line);
+  padding: 18px var(--s-7);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  align-content: start;
 }
-.preview {
-  margin: auto;
-  width: 100%;
-  max-width: 900px;
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 96px;
+  padding: 18px 20px;
+  text-align: left;
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  transition: border-color 0.15s;
+}
+.card:hover {
+  border-color: var(--c-line-strong);
+}
+.card:active {
+  transform: scale(0.99);
+}
+.cardLive {
+  border-color: var(--c-accent-border);
+  background: var(--grad-song-live);
+}
+.cardIcon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--r-sm);
+  background: var(--c-surface-3);
+  color: var(--c-text-dim);
+}
+.cardLive .cardIcon {
+  background: var(--c-accent-tint);
+  color: var(--c-accent-bright);
+}
+.cardLabel {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--c-text);
+  overflow-wrap: anywhere;
+}
+.badge {
+  flex: none;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: var(--r-chip);
+  background: var(--c-accent-badge);
+  color: var(--c-on-accent);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+/* ---- presenter console: live slide left, next + notes right ---- */
+.console {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-7) 0;
+}
+.main {
+  flex: 1 1 62%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/*
+ * Height-driven, not width-driven. A frame at `width: 100%` with a max-height
+ * keeps its full width and crops the bottom off the slide; deriving width from
+ * the available height keeps the whole 16:9 visible. The extra class raises
+ * specificity above SlidePreview's own `.frame`.
+ */
+.main .fit {
   height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+.side {
+  flex: 1 1 38%;
+  min-width: 220px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-height: 0;
+}
+.nextBlock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.notesBlock {
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-4);
+  gap: var(--s-2);
 }
-/* The live slide takes what's left; the next strip keeps its own height. */
-.preview > :first-child {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.nextWrap {
-  flex: none;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-.nextLabel {
-  flex: none;
+.sideLabel {
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--c-text-fainter);
 }
-/* Small enough to read as "what's coming", not to compete with the live slide. */
-.nextPreview {
-  max-width: 260px;
-  opacity: 0.75;
+.sideEmpty {
+  margin: 0;
+  padding: var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--c-surface-inset);
+  color: var(--c-text-fainter);
+  font-size: 15px;
+}
+.notes {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--r-sm);
+  background: var(--c-surface-inset);
+  color: var(--c-text-2);
+  font-size: 16px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .slide {
@@ -103,14 +191,12 @@
   color: var(--c-text-reading);
   white-space: pre-wrap;
 }
-.placeholder {
-  margin: auto;
-  color: var(--c-text-fainter);
-  font-size: 17px;
-}
 
+/* ---- empty state ---- */
 .empty {
+  grid-column: 1 / -1;
   margin: auto;
+  padding: var(--s-8) 0;
   text-align: center;
   color: var(--c-text-dim);
   display: flex;
@@ -129,16 +215,7 @@
   font-size: 15px;
 }
 
-.notes {
-  flex: none;
-  margin: var(--s-3) var(--s-7) 0;
-  padding: 12px 16px;
-  border-radius: var(--r-xs);
-  background: var(--c-surface-inset);
-  color: var(--c-text-fainter);
-  font-size: 14px;
-}
-
+/* ---- nav ---- */
 .nav {
   flex: none;
   display: flex;
@@ -198,4 +275,19 @@
   color: var(--c-text-fainter);
   font-weight: 500;
   font-size: 13px;
+}
+
+/* Portrait / narrow: stack rather than squeezing the live slide. */
+@media (max-aspect-ratio: 1/1) {
+  .console {
+    flex-direction: column;
+  }
+  .side {
+    max-width: none;
+    flex-direction: row;
+  }
+  .nextBlock,
+  .notesBlock {
+    flex: 1;
+  }
 }
