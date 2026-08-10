@@ -37,6 +37,16 @@ export function SettingsView(): ReactNode {
     navigate(settings.defaultRole === 'settings' ? 'home' : settings.defaultRole);
   }
 
+  /**
+   * Leaving Settings saves too. There is no "cancel" here — every field is a
+   * device preference — and silently discarding a code someone just typed
+   * looks exactly like the code being wrong.
+   */
+  function leave() {
+    commitSettings();
+    navigate('home');
+  }
+
   function cycleRole() {
     const i = ROLE_CYCLE.findIndex((r) => r.value === settings.defaultRole);
     const next = ROLE_CYCLE[(i + 1) % ROLE_CYCLE.length];
@@ -53,7 +63,7 @@ export function SettingsView(): ReactNode {
           <button
             type="button"
             className={styles.back}
-            onClick={() => navigate('home')}
+            onClick={leave}
             aria-label="Back to home"
           >
             <Icon name="arrow_back" size={26} />

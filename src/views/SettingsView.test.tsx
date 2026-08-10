@@ -100,3 +100,23 @@ describe('Settings → first run', () => {
     expect(screen.getByText(/1 project, 1 bible/i)).toBeInTheDocument();
   });
 });
+
+describe('Settings → leaving the view', () => {
+  it('saves on the back button, not only on "Go to Stage"', async () => {
+    // Every field here is a device preference; there is no cancel. Discarding a
+    // code someone just typed is indistinguishable from the code being wrong.
+    localStorage.setItem(STORAGE_KEYS.host, '10.0.0.5');
+    const user = userEvent.setup();
+    render(
+      <AppProvider>
+        <App />
+      </AppProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Settings/i }));
+    await user.type(screen.getByPlaceholderText('6897'), '4321');
+    await user.click(screen.getByRole('button', { name: 'Back to home' }));
+
+    expect(localStorage.getItem(STORAGE_KEYS.password)).toBe('4321');
+  });
+});
