@@ -144,6 +144,8 @@ Keep `base: './'` regardless — it serves A and B equally well.
     The wire format, every payload shape, and why the documented API can't be used from a
     browser. **Read this before touching `src/lib/`.**
   - `7d28ea57-d588-4f2c-9672-4f59cca8b2a9` — TASK-10, contributing the findings upstream
+  - `e55c5287-8d41-46d8-b5ab-7bd173028248` — **Recipe: reverse-engineering a socket protocol
+    from a vendor's own web client** — the method and its traps, if this ever needs redoing
   - `b3df35f0-490d-45f6-b50d-21596f12f889` — the docs-derived note the above corrects
     (carries a correction banner; several of its central claims are wrong)
   - `1c9a3d51-6aa9-4fa2-a6c1-32e757f611b8` — FreeShow Bible import: json-bible spec + local validation
