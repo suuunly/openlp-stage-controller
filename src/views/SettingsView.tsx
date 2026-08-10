@@ -119,6 +119,7 @@ export function SettingsView(): ReactNode {
               projects={projects.length}
               bibles={bibles.length}
               configured={configured}
+              hasCode={settings.password.trim().length > 0}
             />
           </div>
         </section>
@@ -196,11 +197,13 @@ function StatusLine({
   projects,
   bibles,
   configured,
+  hasCode,
 }: {
   connection: ConnectionStatus;
   projects: number;
   bibles: number;
   configured: boolean;
+  hasCode: boolean;
 }): ReactNode {
   if (!configured) {
     return (
@@ -222,10 +225,16 @@ function StatusLine({
     );
   }
   if (connection === 'unauthorized') {
+    // An empty box is a different problem from a wrong code, and saying
+    // "FreeShow rejected it" when nothing was sent just sends people hunting.
     return (
       <div className={`${styles.testResult} ${styles.testFail}`}>
         <Icon name="wifi_off" size={20} />
-        <span>FreeShow rejected the code — check it in Settings → Connection</span>
+        <span>
+          {hasCode
+            ? 'FreeShow rejected the code — check it in Settings → Connection'
+            : 'Enter the 4-digit code — FreeShow shows it beside RemoteShow’s QR'}
+        </span>
       </div>
     );
   }
