@@ -1,173 +1,128 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  actionUrl,
+  buildLiveItem,
+  buildScriptureItem,
   classifyItem,
+  cleanTitle,
   extractSlideText,
-  isSendOnly,
-  normalizeLiveItem,
+  flattenShow,
+  formatReference,
+  normalizeBible,
+  normalizeBibles,
+  normalizeOutput,
   normalizeProjects,
-  nextSlide,
-  readOutputActive,
-  resetTransportState,
-  sendAction,
-  stripHtml,
-  unwrap,
+  normalizeShowIndex,
 } from './api';
 
-const CONN = { host: '10.0.0.5', port: '5506' };
+/*
+ * Every fixture below is a real payload captured from FreeShow on 2026-08-10,
+ * trimmed for length. See the Usable fragment *FreeShow RemoteShow protocol
+ * (port 5510) — VERIFIED LIVE*.
+ */
 
-describe('actionUrl', () => {
-  it('builds an action-based GET, not a path', () => {
-    expect(actionUrl('next_slide', undefined, CONN)).toBe(
-      'http://10.0.0.5:5506/?action=next_slide',
-    );
-  });
+const SHOWS = {
+  e67cdfc268e: { name: 'Unnamed', category: null, quickAccess: {} },
+  default: { name: 'Welcome', category: 'presentation', quickAccess: {} },
+};
 
-  it('serialises data into the `data` query param', () => {
-    const url = new URL(actionUrl('index_select_slide', { index: 3 }, CONN));
-    expect(url.searchParams.get('action')).toBe('index_select_slide');
-    expect(JSON.parse(url.searchParams.get('data') ?? '')).toEqual({ index: 3 });
-  });
+const PROJECTS = [
+  {
+    id: 'default',
+    name: 'Example',
+    created: 1640995200000,
+    parent: 'default',
+    shows: [
+      { id: 'default', index: 0 },
+      { id: 'section', type: 'section', name: 'Example', notes: 'Write notes here', index: 1 },
+    ],
+  },
+];
 
-  it('drops undefined optional fields rather than sending nulls', () => {
-    const url = new URL(
-      actionUrl('index_select_slide', { index: 0, showId: undefined }, CONN),
-    );
-    expect(JSON.parse(url.searchParams.get('data') ?? '')).toEqual({ index: 0 });
-  });
-});
+const line = (value: string) => ({ align: '', text: [{ value, style: '' }] });
 
-describe('sendAction', () => {
-  it('parses a JSON body', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, text: async () => '{"a":1}' }),
-    );
-    await expect(sendAction('get_output', undefined, CONN)).resolves.toEqual({ a: 1 });
-  });
+const SHOW_DETAIL = {
+  name: 'Welcome',
+  category: 'presentation',
+  settings: { activeLayout: 'default', template: 'header' },
+  slides: {
+    one: { group: 'V1', color: null, notes: 'Greet the visitors', items: [{ lines: [line('Welcome!')] }], children: ['1ba4a9bd5f4'] },
+    '1ba4a9bd5f4': { group: null, color: null, notes: '', items: [{ lines: [line('Bread bed')] }] },
+  },
+  layouts: { default: { slides: [{ id: 'one' }] } },
+};
 
-  it('throws for a query the browser will not let us read', async () => {
-    await expect(sendAction('get_output', undefined, CONN)).rejects.toThrow(
-      /Cannot reach FreeShow/,
-    );
-  });
-
-  it('replays a blocked command opaquely so controls still work', async () => {
-    resetTransportState();
-    const fetchMock = vi
-      .fn()
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValueOnce({ type: 'opaque' });
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(sendAction('next_slide', undefined, CONN)).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1][1]).toMatchObject({ mode: 'no-cors' });
-    expect(isSendOnly()).toBe(true);
-    resetTransportState();
-  });
-
-  it('gives up when even the opaque replay fails', async () => {
-    resetTransportState();
-    await expect(nextSlide()).rejects.toThrow(/Cannot reach FreeShow/);
-    expect(isSendOnly()).toBe(false);
-  });
-});
-
-describe('unwrap', () => {
-  it('peels transport envelopes', () => {
-    expect(unwrap({ action: 'get_slide', data: { name: 'x' } })).toEqual({ name: 'x' });
-    expect(unwrap({ results: [1, 2] })).toEqual([1, 2]);
-  });
-
-  it('leaves a payload that merely has a `data` field alone', () => {
-    const payload = { name: 'Slide', data: 'keep me' };
-    expect(unwrap(payload)).toBe(payload);
-  });
-});
-
-describe('classifyItem', () => {
-  it('uses the explicit type first', () => {
-    expect(classifyItem({ type: 'image' })).toBe('image');
-    expect(classifyItem({ type: 'section' })).toBe('section');
-    expect(classifyItem({ type: 'pdf' })).toBe('presentation');
-  });
-
-  it('falls back to the category, then the filename', () => {
-    expect(classifyItem({ category: 'song' })).toBe('song');
-    expect(classifyItem({ name: 'backdrop.JPG' })).toBe('image');
-    expect(classifyItem({ name: 'sermon.pptx' })).toBe('presentation');
-  });
-
-  it('treats a bare show as a song — a service is mostly songs', () => {
-    expect(classifyItem({ type: 'show', name: 'Amazing Grace' })).toBe('song');
+describe('normalizeShowIndex', () => {
+  it('indexes names and categories by show id', () => {
+    const index = normalizeShowIndex(SHOWS);
+    expect(index.get('default')).toEqual({ name: 'Welcome', category: 'presentation' });
+    expect(index.get('e67cdfc268e')?.category).toBeNull();
   });
 });
 
 describe('normalizeProjects', () => {
-  it('normalises an array of projects with their items', () => {
-    const projects = normalizeProjects({
-      data: [
-        {
-          id: 'p1',
-          name: 'Sunday',
-          shows: [
-            { id: 's1', name: 'Amazing Grace', type: 'show' },
-            { id: 'i1', name: 'assets/backdrop.png', type: 'image' },
-          ],
-        },
-      ],
+  it('resolves item names from the show index', () => {
+    // Project entries are bare {id, index} — the name only exists in SHOWS.
+    const projects = normalizeProjects(PROJECTS, normalizeShowIndex(SHOWS));
+    expect(projects).toHaveLength(1);
+    expect(projects[0].name).toBe('Example');
+    expect(projects[0].items[0]).toMatchObject({
+      id: 'default',
+      title: 'Welcome',
+      kind: 'presentation',
     });
-    expect(projects).toHaveLength(1);
-    expect(projects[0].name).toBe('Sunday');
-    expect(projects[0].items.map((i) => i.kind)).toEqual(['song', 'image']);
-    // Filename-ish titles lose their path and extension.
-    expect(projects[0].items[1].title).toBe('backdrop');
   });
 
-  it('accepts an id-keyed map', () => {
-    const projects = normalizeProjects({ p9: { name: 'Evening', shows: [] } });
-    expect(projects).toEqual([
-      { id: 'p9', name: 'Evening', items: [], active: false },
-    ]);
+  it('keeps section items and their notes', () => {
+    const projects = normalizeProjects(PROJECTS, normalizeShowIndex(SHOWS));
+    expect(projects[0].items[1]).toMatchObject({
+      kind: 'section',
+      title: 'Example',
+      notes: 'Write notes here',
+    });
   });
 
-  it('accepts a single project object', () => {
-    const projects = normalizeProjects({ id: 'p1', name: 'Sunday', shows: [] });
-    expect(projects).toHaveLength(1);
-    expect(projects[0].id).toBe('p1');
+  it('accepts an id-keyed map as well as an array', () => {
+    const projects = normalizeProjects({ p1: { name: 'Sunday', shows: [] } }, new Map());
+    expect(projects[0]).toMatchObject({ id: 'p1', name: 'Sunday', items: [] });
   });
 });
 
-describe('stripHtml', () => {
-  it('converts <br> and block tags to newlines and strips the rest', () => {
-    const html = '<p>Amazing grace<br>how sweet</p><p>the sound</p>';
-    expect(stripHtml(html)).toBe('Amazing grace\nhow sweet\nthe sound');
+describe('classifyItem', () => {
+  it('trusts FreeShow’s own category first', () => {
+    expect(classifyItem({ id: 'x' }, { category: 'song' })).toBe('song');
+    expect(classifyItem({ id: 'x' }, { category: 'presentation' })).toBe('presentation');
   });
 
-  it('decodes common entities', () => {
-    expect(stripHtml('Bless &amp; keep &#39;us&#39;')).toBe("Bless & keep 'us'");
+  it('uses the item type for media and sections', () => {
+    expect(classifyItem({ type: 'section' })).toBe('section');
+    expect(classifyItem({ type: 'image' })).toBe('image');
+    expect(classifyItem({ type: 'pdf' })).toBe('presentation');
+  });
+
+  it('falls back to the filename, then to song', () => {
+    expect(classifyItem({ name: 'backdrop.JPG' }, { category: null })).toBe('image');
+    // Uncategorised shows land in the Songs view rather than vanishing.
+    expect(classifyItem({ id: 'x' }, { category: null })).toBe('song');
+  });
+});
+
+describe('cleanTitle', () => {
+  it('strips paths and extensions', () => {
+    expect(cleanTitle('media/backdrop.png')).toBe('backdrop');
+    expect(cleanTitle('Amazing Grace')).toBe('Amazing Grace');
   });
 });
 
 describe('extractSlideText', () => {
-  it('reads FreeShow’s nested items ▸ lines ▸ text ▸ value shape', () => {
-    const slide = {
-      items: [
-        {
-          lines: [
-            { text: [{ value: 'Amazing grace, ' }, { value: 'how sweet' }] },
-            { text: [{ value: 'the sound' }] },
-          ],
-        },
-      ],
-    };
-    expect(extractSlideText(slide)).toBe('Amazing grace, how sweet\nthe sound');
+  it('reads items ▸ lines ▸ text ▸ value', () => {
+    const slide = { items: [{ lines: [line('Amazing grace'), line('how sweet')] }] };
+    expect(extractSlideText(slide)).toBe('Amazing grace\nhow sweet');
   });
 
-  it('falls back to a plain string or an html field', () => {
-    expect(extractSlideText('just text')).toBe('just text');
-    expect(extractSlideText({ html: '<p>hi<br>there</p>' })).toBe('hi\nthere');
+  it('reads tempItems, which is what scripture uses', () => {
+    expect(extractSlideText({ tempItems: [{ lines: [line('Verði ljós!')] }] })).toBe(
+      'Verði ljós!',
+    );
   });
 
   it('returns empty string for nothing usable', () => {
@@ -176,56 +131,174 @@ describe('extractSlideText', () => {
   });
 });
 
-describe('normalizeLiveItem', () => {
-  it('returns null for empty input', () => {
-    expect(normalizeLiveItem(null)).toBeNull();
-    expect(normalizeLiveItem({ data: {} })).toBeNull();
-    expect(normalizeLiveItem({ data: [] })).toBeNull();
+describe('flattenShow', () => {
+  it('interleaves parent slides and their children, in layout order', () => {
+    // The layout lists only "one"; "Bread bed" is its child. FreeShow counts
+    // both, and OUT_DATA.slide.index indexes the flattened sequence.
+    const show = flattenShow(SHOW_DETAIL, 'default');
+    expect(show?.slides.map((s) => s.text)).toEqual(['Welcome!', 'Bread bed']);
+    expect(show?.slides.map((s) => s.index)).toEqual([0, 1]);
   });
 
-  it('normalises a slide payload with an index', () => {
-    const li = normalizeLiveItem({
-      data: {
-        showId: 'show-1',
-        name: 'Amazing Grace',
-        index: 2,
-        total: 8,
-        group: 'V2',
-        slide: { items: [{ lines: [{ text: [{ value: 'line one' }] }] }] },
+  it('carries per-slide groups and notes', () => {
+    const show = flattenShow(SHOW_DETAIL, 'default');
+    expect(show?.slides[0]).toMatchObject({ group: 'V1', notes: 'Greet the visitors' });
+    expect(show?.slides[1].notes).toBe('');
+  });
+
+  it('honours settings.activeLayout over whichever layout is first', () => {
+    const twoLayouts = {
+      ...SHOW_DETAIL,
+      settings: { activeLayout: 'alt' },
+      layouts: {
+        default: { slides: [{ id: 'one' }] },
+        alt: { slides: [{ id: '1ba4a9bd5f4' }] },
       },
-    });
-    expect(li).toEqual({
-      id: 'show-1',
-      kind: null,
-      name: 'Amazing Grace',
-      slide: 2,
-      total: 8,
-      text: 'line one',
-      tag: 'V2',
-    });
-  });
-
-  it('treats a numeric `slide` as the index, not the slide body', () => {
-    const li = normalizeLiveItem({ showId: 's', name: 'X', slide: 4, total: 6 });
-    expect(li?.slide).toBe(4);
-  });
-
-  it('normalises an array of slides and finds the selected one', () => {
-    const li = normalizeLiveItem([
-      { name: 'How Great', text: 'first', selected: false, showId: 'show-2' },
-      { name: 'How Great', text: 'second', selected: true, showId: 'show-2' },
+    };
+    expect(flattenShow(twoLayouts, 'default')?.slides.map((s) => s.text)).toEqual([
+      'Bread bed',
     ]);
-    expect(li?.id).toBe('show-2');
-    expect(li?.slide).toBe(1);
-    expect(li?.total).toBe(2);
-    expect(li?.text).toBe('second');
+  });
+
+  it('returns null for an empty payload', () => {
+    expect(flattenShow({}, 'x')).toBeNull();
   });
 });
 
-describe('readOutputActive', () => {
-  it('reads a boolean when the payload has one, otherwise null', () => {
-    expect(readOutputActive({ enabled: false })).toBe(false);
-    expect(readOutputActive({ blank: true })).toBe(false);
-    expect(readOutputActive({ something: 1 })).toBeNull();
+describe('normalizeOutput', () => {
+  it('reads a show position', () => {
+    expect(normalizeOutput({ slide: { id: 'default', layout: 'default', index: 1, line: 0 } })).toEqual({
+      showId: 'default',
+      layoutId: 'default',
+      index: 1,
+      temporary: false,
+    });
+  });
+
+  it('flags scripture as temporary rather than treating "temp" as a show id', () => {
+    const out = normalizeOutput({ slide: { id: 'temp', tempItems: [] } });
+    expect(out.temporary).toBe(true);
+    expect(out.showId).toBeNull();
+  });
+});
+
+describe('buildLiveItem', () => {
+  const show = flattenShow(SHOW_DETAIL, 'default')!;
+
+  it('joins position and show into what the views need', () => {
+    const live = buildLiveItem(
+      { showId: 'default', layoutId: 'default', index: 0, temporary: false },
+      show,
+    );
+    expect(live).toMatchObject({
+      id: 'default',
+      name: 'Welcome',
+      slide: 0,
+      total: 2,
+      text: 'Welcome!',
+      nextText: 'Bread bed',
+      notes: 'Greet the visitors',
+      group: 'V1',
+    });
+  });
+
+  it('has no next text on the last slide', () => {
+    const live = buildLiveItem(
+      { showId: 'default', layoutId: 'default', index: 1, temporary: false },
+      show,
+    );
+    expect(live?.nextText).toBe('');
+  });
+
+  it('reports the position even before the show definition arrives', () => {
+    const live = buildLiveItem(
+      { showId: 'other', layoutId: null, index: 3, temporary: false },
+      show,
+    );
+    expect(live).toMatchObject({ id: 'other', slide: 3, text: '' });
+  });
+
+  it('is null while scripture is live', () => {
+    expect(
+      buildLiveItem({ showId: null, layoutId: null, index: 0, temporary: true }, show),
+    ).toBeNull();
+  });
+});
+
+describe('buildScriptureItem', () => {
+  const SCRIPTURE_OUT = {
+    slide: {
+      id: 'temp',
+      tempItems: [{ lines: [line("Gud segði: 'Verði ljós!' Og ljós varð.")] }],
+      nextSlides: [[{ lines: [line('Gud sá, at ljósið var gott;')] }]],
+      customDynamicValues: {
+        scripture_name: 'Victor',
+        scripture_book: '1 Mósebók',
+        scripture_chapter: '1',
+        scripture_reference_full: '1 Mósebók 1:3',
+      },
+    },
+  };
+
+  it('reads the reference and verse text FreeShow inlines into the output', () => {
+    const item = buildScriptureItem(SCRIPTURE_OUT);
+    expect(item).toMatchObject({
+      id: null,
+      name: 'Victor',
+      scriptureRef: '1 Mósebók 1:3',
+      text: "Gud segði: 'Verði ljós!' Og ljós varð.",
+      nextText: 'Gud sá, at ljósið var gott;',
+    });
+  });
+
+  it('is null when a show is live', () => {
+    expect(buildScriptureItem({ slide: { id: 'default', index: 0 } })).toBeNull();
+  });
+});
+
+describe('scripture browsing', () => {
+  const SCRIPTURE = {
+    kjv: { name: 'King James (Authorised) Version', api: true },
+    '6ef117816db': { name: 'Victor', api: false },
+  };
+
+  it('separates local bibles from online ones', () => {
+    const bibles = normalizeBibles(SCRIPTURE);
+    expect(bibles).toContainEqual({ id: '6ef117816db', name: 'Victor', online: false });
+    expect(bibles.find((b) => b.id === 'kjv')?.online).toBe(true);
+  });
+
+  it('normalises the Faroese bible tree, verse text included', () => {
+    const bible = normalizeBible({
+      id: '6ef117816db',
+      bible: {
+        name: 'Victor',
+        metadata: { title: 'Victor', language: 'fo' },
+        books: [
+          {
+            number: 1,
+            name: '1 Mósebók',
+            id: 'GEN',
+            chapters: [
+              { number: 1, verses: [{ number: 1, text: 'Í upphavi skapti Gud himmal og jørð.' }] },
+            ],
+          },
+        ],
+      },
+    });
+    expect(bible?.language).toBe('fo');
+    expect(bible?.books[0]).toMatchObject({ name: '1 Mósebók', key: 'GEN' });
+    expect(bible?.books[0].chapters[0].verses[0].text).toMatch(/^Í upphavi/);
+  });
+
+  it('returns null when there is no bible in the payload', () => {
+    expect(normalizeBible({ id: 'x' })).toBeNull();
+  });
+});
+
+describe('formatReference', () => {
+  it('formats what start_scripture expects, with Faroese book names', () => {
+    expect(formatReference('Jóhannes', 3, 16)).toBe('Jóhannes 3:16');
+    expect(formatReference('1 Mósebók', 1)).toBe('1 Mósebók 1');
   });
 });

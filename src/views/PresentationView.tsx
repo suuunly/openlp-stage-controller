@@ -12,10 +12,9 @@ const PREV_KEYS = ['ArrowLeft', 'PageUp'];
 /**
  * Presentation view.
  *
- * FreeShow's API exposes neither slide thumbnails nor speaker notes (TASK-07),
- * so the design's thumbnail-and-notes layout is not buildable as drawn. What
- * survives is the part a speaker actually needs hands-free: the text on screen
- * now, where they are in the deck, and clicker-sized navigation.
+ * Speaker notes come from `get_show`'s per-slide `notes` — they are not in the
+ * published API, which is why TASK-07 recorded them as impossible. Thumbnails
+ * remain unavailable, so the current slide is shown as text.
  */
 export function PresentationView(): ReactNode {
   const {
@@ -26,7 +25,6 @@ export function PresentationView(): ReactNode {
     activateItem,
     goNext,
     goPrev,
-    blanked,
   } = useApp();
 
   const guard = useTapGuard();
@@ -98,14 +96,14 @@ export function PresentationView(): ReactNode {
             {slideText}
           </p>
         ) : (
-          <p className={styles.placeholder}>
-            {blanked ? 'Screens are blanked' : 'Nothing on the screens yet'}
-          </p>
+          <p className={styles.placeholder}>Nothing on the screens yet</p>
         )}
       </div>
 
       <p className={styles.notes}>
-        Speaker notes aren’t available — FreeShow’s API doesn’t expose them
+        {liveItem?.notes?.trim()
+          ? liveItem.notes
+          : 'No notes for this slide'}
       </p>
 
       <footer className={styles.nav}>

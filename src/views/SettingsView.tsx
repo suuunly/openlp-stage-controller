@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
-import { runDiagnostics, type DiagnosticsReport } from '../lib/api';
 import { isConfigured } from '../lib/storage';
 import { Icon } from '../components/Icon';
-import type { FontSize, ViewId } from '../lib/types';
+import type { ConnectionStatus, FontSize, ViewId } from '../lib/types';
 import styles from './SettingsView.module.css';
 
 const FONT_OPTIONS: { value: FontSize; label: string }[] = [
@@ -21,23 +20,17 @@ const ROLE_CYCLE: { value: ViewId; label: string }[] = [
 ];
 
 export function SettingsView(): ReactNode {
-  const { settings, updateSettings, commitSettings, navigate } = useApp();
-  const [testing, setTesting] = useState(false);
-  const [report, setReport] = useState<DiagnosticsReport | null>(null);
+  const {
+    settings,
+    updateSettings,
+    commitSettings,
+    navigate,
+    connection,
+    projects,
+    bibles,
+  } = useApp();
 
   const configured = isConfigured(settings);
-
-  async function testConnection() {
-    setTesting(true);
-    setReport(null);
-    try {
-      setReport(
-        await runDiagnostics({ host: settings.host, port: settings.port }),
-      );
-    } finally {
-      setTesting(false);
-    }
-  }
 
   function goToStage() {
     commitSettings();
@@ -73,7 +66,6 @@ export function SettingsView(): ReactNode {
       </header>
 
       <div className={styles.body}>
-        {/* ---- Connection ---- */}
         <section>
           <h2 className={styles.sectionLabel}>FreeShow Connection</h2>
 
@@ -87,73 +79,52 @@ export function SettingsView(): ReactNode {
                 placeholder="192.168.1.50"
                 autoComplete="off"
                 value={settings.host}
-                onChange={(e) => {
-                  updateSettings({ host: e.target.value });
-                  setReport(null);
-                }}
+                onChange={(e) => updateSettings({ host: e.target.value })}
               />
             </label>
             <label className={styles.fieldNarrow}>
-              <span className={styles.fieldLabel}>API port</span>
+              <span className={styles.fieldLabel}>Port</span>
               <input
                 className={`${styles.input} ${styles.mono}`}
                 type="text"
                 inputMode="numeric"
-                placeholder="5506"
+                placeholder="5510"
                 value={settings.port}
-                onChange={(e) => {
-                  updateSettings({ port: e.target.value });
-                  setReport(null);
-                }}
+                onChange={(e) => updateSettings({ port: e.target.value })}
+              />
+            </label>
+            <label className={styles.fieldNarrow}>
+              <span className={styles.fieldLabel}>Code</span>
+              <input
+                className={`${styles.input} ${styles.mono}`}
+                type="text"
+                inputMode="numeric"
+                placeholder="6897"
+                autoComplete="off"
+                value={settings.password}
+                onChange={(e) => updateSettings({ password: e.target.value })}
               />
             </label>
           </div>
 
           <p className={styles.hint}>
-            FreeShow’s API server is <strong>off by default</strong>. Turn it on
-            in FreeShow under <em>Settings → Connection</em>, and use the port it
-            shows there (usually 5506).
+            In FreeShow, open <em>Settings → Connection</em> and switch{' '}
+            <strong>RemoteShow</strong> on. Click its row for the address and the{' '}
+            <strong>4-digit code</strong> — the same ones the built-in remote uses.
           </p>
 
           <div className={styles.testRow}>
-            <button
-              type="button"
-              className={styles.testBtn}
-              onClick={testConnection}
-              disabled={testing}
-            >
-              <Icon name="cable" size={22} />
-              <span>Test Connection</span>
-            </button>
-            {testing && (
-              <div className={`${styles.testResult} ${styles.testTesting}`}>
-                <Icon name="progress_activity" size={20} spin />
-                <span>Testing…</span>
-              </div>
-            )}
-            {!testing && report && <TestSummary report={report} />}
+            <StatusLine
+              connection={connection}
+              projects={projects.length}
+              bibles={bibles.length}
+              configured={configured}
+            />
           </div>
-
-          {!testing && report && (
-            <ul className={styles.checks}>
-              {report.checks.map((check) => (
-                <li key={check.action} className={styles.check}>
-                  <Icon
-                    name={check.ok ? 'check_circle' : 'wifi_off'}
-                    size={16}
-                    className={check.ok ? styles.checkOk : styles.checkFail}
-                  />
-                  <span className={styles.checkLabel}>{check.label}</span>
-                  <span className={styles.checkDetail}>{check.detail}</span>
-                </li>
-              ))}
-            </ul>
-          )}
         </section>
 
         <div className={styles.divider} />
 
-        {/* ---- Display ---- */}
         <section>
           <h2 className={styles.sectionLabel}>Display</h2>
 
@@ -209,39 +180,67 @@ export function SettingsView(): ReactNode {
 
       <footer className={styles.footer}>
         <button type="button" className={styles.primary} onClick={goToStage}>
-          Go to Stage <Icon name="arrow_forward" size={22} />
+          {configured ? 'Go to Stage' : 'Connect'} <Icon name="arrow_forward" size={22} />
         </button>
       </footer>
     </section>
   );
 }
 
-function TestSummary({ report }: { report: DiagnosticsReport }): ReactNode {
-  if (!report.reachable) {
+/**
+ * Live connection state. There is no "test" button any more — the socket is
+ * either up or it isn't, and it says so continuously.
+ */
+function StatusLine({
+  connection,
+  projects,
+  bibles,
+  configured,
+}: {
+  connection: ConnectionStatus;
+  projects: number;
+  bibles: number;
+  configured: boolean;
+}): ReactNode {
+  if (!configured) {
     return (
-      <div className={`${styles.testResult} ${styles.testFail}`}>
-        <Icon name="wifi_off" size={20} />
+      <div className={`${styles.testResult} ${styles.testTesting}`}>
+        <Icon name="cable" size={20} />
+        <span>Enter the address and code, then tap Connect</span>
+      </div>
+    );
+  }
+  if (connection === 'connected') {
+    return (
+      <div className={`${styles.testResult} ${styles.testOk}`}>
+        <Icon name="check_circle" size={20} />
         <span>
-          No answer — check the IP, and that FreeShow’s API server is switched on
+          Connected — {projects} project{projects === 1 ? '' : 's'}, {bibles} bible
+          {bibles === 1 ? '' : 's'}
         </span>
       </div>
     );
   }
-  if (report.corsBlocked) {
+  if (connection === 'unauthorized') {
+    return (
+      <div className={`${styles.testResult} ${styles.testFail}`}>
+        <Icon name="wifi_off" size={20} />
+        <span>FreeShow rejected the code — check it in Settings → Connection</span>
+      </div>
+    );
+  }
+  if (connection === 'connecting') {
     return (
       <div className={`${styles.testResult} ${styles.testTesting}`}>
-        <Icon name="cast_connected" size={20} />
-        <span>
-          FreeShow answered, but this browser blocked the reply — controls will
-          work, live read-back won’t
-        </span>
+        <Icon name="progress_activity" size={20} spin />
+        <span>Connecting…</span>
       </div>
     );
   }
   return (
-    <div className={`${styles.testResult} ${styles.testOk}`}>
-      <Icon name="check_circle" size={20} />
-      <span>Connected</span>
+    <div className={`${styles.testResult} ${styles.testFail}`}>
+      <Icon name="wifi_off" size={20} />
+      <span>No answer — check the IP, and that RemoteShow is switched on</span>
     </div>
   );
 }

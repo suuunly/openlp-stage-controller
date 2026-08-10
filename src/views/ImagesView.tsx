@@ -13,7 +13,7 @@ import styles from './ImagesView.module.css';
  * badge, no pretence of a preview that isn't there.
  */
 export function ImagesView(): ReactNode {
-  const { serviceItems, liveItem, activateItem, refresh, activeProject } = useApp();
+  const { serviceItems, liveItem, activateItem, activeProject } = useApp();
 
   const images = serviceItems.filter((it) => it.kind === 'image');
   const liveId = liveItem?.id ?? null;
@@ -25,16 +25,6 @@ export function ImagesView(): ReactNode {
         icon="image"
         title="Images"
         subtitle={activeProject?.name ?? 'Tap an image to put it on the screens'}
-        right={
-          <button
-            type="button"
-            className={styles.refresh}
-            onClick={refresh}
-            aria-label="Reload service items"
-          >
-            <Icon name="progress_activity" size={22} />
-          </button>
-        }
       />
 
       <div className={styles.grid}>

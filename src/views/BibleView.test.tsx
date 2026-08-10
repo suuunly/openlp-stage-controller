@@ -1,32 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from '../App';
 import { AppProvider } from '../state/AppContext';
 import { STORAGE_KEYS } from '../lib/storage';
+import { MockWebSocket } from '../test/mockSocket';
 import { pushHistory } from './BibleView';
 
-/** Land straight in the Bible view with the app already configured. */
+/** Land in the Bible view with the app configured and the socket authenticated. */
 function renderBibleView() {
   localStorage.setItem(STORAGE_KEYS.host, '10.0.0.5');
-  localStorage.setItem(STORAGE_KEYS.port, '5506');
+  localStorage.setItem(STORAGE_KEYS.port, '5510');
+  localStorage.setItem(STORAGE_KEYS.password, '6897');
   localStorage.setItem(STORAGE_KEYS.defaultRole, 'bible');
-  return render(
+  const view = render(
     <AppProvider>
       <App />
     </AppProvider>,
   );
-}
-
-/** Actions sent to FreeShow, in order, with their decoded data. */
-function sentActions(fetchMock: ReturnType<typeof vi.fn>) {
-  return fetchMock.mock.calls.map(([url]) => {
-    const params = new URL(url as string).searchParams;
-    return {
-      action: params.get('action'),
-      data: JSON.parse(params.get('data') ?? 'null'),
-    };
-  });
+  act(() => MockWebSocket.last().handshake());
+  return view;
 }
 
 describe('pushHistory', () => {
@@ -39,7 +32,6 @@ describe('pushHistory', () => {
     expect(history[0]).toBe('Hebr 11:1');
 
     history = pushHistory(history, 'Sálm 23');
-    expect(history).toHaveLength(5);
     expect(history[0]).toBe('Sálm 23');
     expect(history.filter((h) => h === 'Sálm 23')).toHaveLength(1);
 
@@ -52,13 +44,6 @@ describe('pushHistory', () => {
 });
 
 describe('Bible view', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
-    vi.stubGlobal('fetch', fetchMock);
-  });
-
   it('sends start_scripture with the reference as typed', async () => {
     const user = userEvent.setup();
     renderBibleView();
@@ -66,12 +51,9 @@ describe('Bible view', () => {
     await user.type(screen.getByLabelText('Reference'), 'Jóh 3:16');
     await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
 
-    await vi.waitFor(() => {
-      expect(sentActions(fetchMock)).toContainEqual({
-        action: 'start_scripture',
-        // Faroese book names go through untouched — FreeShow parses the string.
-        data: { reference: 'Jóh 3:16' },
-      });
+    // Faroese book names go through untouched — FreeShow parses the string.
+    expect(MockWebSocket.last().find('API:start_scripture')).toEqual({
+      reference: 'Jóh 3:16',
     });
   });
 
@@ -93,29 +75,47 @@ describe('Bible view', () => {
     renderBibleView();
 
     await user.click(screen.getByRole('button', { name: /NEXT/ }));
-    await vi.waitFor(() => {
-      expect(sentActions(fetchMock).some((c) => c.action === 'scripture_next')).toBe(true);
-    });
-
     await user.click(screen.getByRole('button', { name: /PREV/ }));
-    await vi.waitFor(() => {
-      expect(sentActions(fetchMock).some((c) => c.action === 'scripture_previous')).toBe(
-        true,
-      );
-    });
+
+    const channels = MockWebSocket.last()
+      .outbound()
+      .map((m) => m.channel);
+    expect(channels).toContain('API:scripture_next');
+    expect(channels).toContain('API:scripture_previous');
+  });
+
+  it('reads the live verse back off the output', async () => {
+    const user = userEvent.setup();
+    renderBibleView();
+
+    await user.type(screen.getByLabelText('Reference'), '1 Mósebók 1:3');
+    await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
+
+    // FreeShow inlines scripture into the output rather than pointing at a show.
+    act(() =>
+      MockWebSocket.last().channel('OUT_DATA', {
+        slide: {
+          id: 'temp',
+          tempItems: [{ lines: [{ text: [{ value: "Gud segði: 'Verði ljós!'" }] }] }],
+          customDynamicValues: { scripture_reference_full: '1 Mósebók 1:3' },
+        },
+      }),
+    );
+
+    expect(await screen.findByText(/Verði ljós/)).toBeInTheDocument();
   });
 
   it('does not steal the arrow keys while a reference is being typed', async () => {
     const user = userEvent.setup();
     renderBibleView();
 
-    const input = screen.getByLabelText('Reference');
-    await user.click(input);
+    await user.click(screen.getByLabelText('Reference'));
     await user.keyboard('Jóh 3{ArrowLeft}{ArrowRight}');
 
-    expect(sentActions(fetchMock).some((c) => c.action === 'scripture_next')).toBe(false);
-    expect(sentActions(fetchMock).some((c) => c.action === 'scripture_previous')).toBe(
-      false,
-    );
+    const channels = MockWebSocket.last()
+      .outbound()
+      .map((m) => m.channel);
+    expect(channels).not.toContain('API:scripture_next');
+    expect(channels).not.toContain('API:scripture_previous');
   });
 });

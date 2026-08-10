@@ -8,10 +8,8 @@ import styles from './ConnectionBanner.module.css';
  * Global connection banner. Shown whenever the app is configured but not fully
  * connected — except on Settings, where the user is already fixing it.
  *
- * `send-only` is its own state on purpose: FreeShow is answering but the
- * browser won't let us read the replies (CORS). Every button still works; only
- * the on-screen read-back is gone. That is worth saying plainly rather than
- * calling it an outage.
+ * `unauthorized` is called out separately: FreeShow answered and rejected the
+ * code, which needs a different fix from "can't reach it".
  */
 export function ConnectionBanner(): ReactNode {
   const { connection, settings, view } = useApp();
@@ -20,21 +18,21 @@ export function ConnectionBanner(): ReactNode {
 
   if (!show) return null;
 
-  const sendOnly = connection === 'send-only';
+  const rejected = connection === 'unauthorized';
 
   return (
     <div
-      className={`${styles.banner} ${sendOnly ? styles.bannerWarn : ''}`}
+      className={`${styles.banner} ${rejected ? '' : styles.bannerWarn}`}
       role="status"
       aria-live="polite"
     >
-      <Icon name={sendOnly ? 'cast_connected' : 'wifi_off'} size={18} />
+      <Icon name={connection === 'connecting' ? 'cast_connected' : 'wifi_off'} size={18} />
       <span>
-        {sendOnly
-          ? 'Controls work, but FreeShow’s replies are blocked — no live read-back'
+        {rejected
+          ? '⚠️ FreeShow rejected the code — check it in Settings'
           : connection === 'connecting'
             ? 'Connecting to FreeShow…'
-            : '⚠️ Cannot reach FreeShow — check WiFi, or that its API server is on'}
+            : '⚠️ Cannot reach FreeShow — check WiFi, or that RemoteShow is on'}
       </span>
     </div>
   );

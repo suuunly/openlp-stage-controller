@@ -1,17 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { MockWebSocket } from './mockSocket';
 
 beforeEach(() => {
-  // Default every test to "FreeShow is not there". A `TypeError` is exactly
-  // what a browser raises for an unreachable host or a CORS rejection, so this
-  // exercises the same path the real app takes when offline — and stops the
-  // polling link from making real network calls. Tests that need a live
-  // FreeShow stub their own fetch over the top.
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
-  );
+  // The app talks to FreeShow over a WebSocket and nothing else, so this is the
+  // only boundary tests need to control. Nothing connects until a test drives
+  // the handshake, which keeps every test starting from "not connected".
+  MockWebSocket.reset();
+  vi.stubGlobal('WebSocket', MockWebSocket);
 });
 
 afterEach(() => {

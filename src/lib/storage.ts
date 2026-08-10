@@ -9,6 +9,7 @@ import type { FontSize, Settings, ViewId } from './types';
 export const STORAGE_KEYS = {
   host: 'freeshow_host',
   port: 'freeshow_port',
+  password: 'freeshow_password',
   fontSize: 'freeshow_font_size',
   defaultRole: 'freeshow_default_role',
   nextPreview: 'freeshow_next_preview',
@@ -27,8 +28,10 @@ export const LEGACY_KEYS = {
 
 export const DEFAULT_SETTINGS: Settings = {
   host: '',
-  // FreeShow's REST/HTTP API port (Settings → Connection).
-  port: '5506',
+  // RemoteShow's port (FreeShow → Settings → Connection). The documented API
+  // ports (5505/5506) cannot drive a real remote — see src/lib/socket.ts.
+  port: '5510',
+  password: '',
   fontSize: 'medium',
   defaultRole: 'home',
   nextPreview: true,
@@ -73,6 +76,7 @@ export function loadSettings(): Settings {
   return {
     host: get(STORAGE_KEYS.host) ?? DEFAULT_SETTINGS.host,
     port: get(STORAGE_KEYS.port) ?? DEFAULT_SETTINGS.port,
+    password: get(STORAGE_KEYS.password) ?? DEFAULT_SETTINGS.password,
     fontSize:
       rawFont && FONT_SIZES.includes(rawFont)
         ? rawFont
@@ -91,6 +95,7 @@ export function loadSettings(): Settings {
 export function saveSettings(s: Settings): void {
   localStorage.setItem(STORAGE_KEYS.host, s.host.trim());
   localStorage.setItem(STORAGE_KEYS.port, s.port.trim() || DEFAULT_SETTINGS.port);
+  localStorage.setItem(STORAGE_KEYS.password, s.password.trim());
   localStorage.setItem(STORAGE_KEYS.fontSize, s.fontSize);
   localStorage.setItem(STORAGE_KEYS.defaultRole, s.defaultRole);
   localStorage.setItem(STORAGE_KEYS.nextPreview, String(s.nextPreview));

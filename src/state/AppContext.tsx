@@ -9,19 +9,28 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  activateProjectItem,
-  fetchProject,
-  fetchProjects,
+  buildLiveItem,
+  buildScriptureItem,
+  connect,
+  disconnect,
+  flattenShow,
   nextSlide,
+  normalizeBible,
+  normalizeBibles,
+  normalizeOutput,
+  normalizeProjects,
+  normalizeShowIndex,
   previousSlide,
-  resetTransportState,
+  requestScripture,
+  requestShow,
   scriptureNext,
   scripturePrevious,
-  selectSlideIndex,
+  selectShow,
+  selectSlide,
   startScripture,
-  toggleOutput,
+  type OutputPosition,
+  type ShowIndex,
 } from '../lib/api';
-import { FreeShowLink } from '../lib/realtime';
 import {
   DEFAULT_SETTINGS,
   applyFontSize,
@@ -30,43 +39,46 @@ import {
   saveSettings,
 } from '../lib/storage';
 import type {
+  Bible,
+  BibleInfo,
   ConnectionStatus,
   LiveItem,
   Project,
   ServiceItem,
   Settings,
+  ShowDetail,
   ViewId,
 } from '../lib/types';
 
 interface AppContextValue {
   settings: Settings;
-  /** Live, in-memory settings edits (not yet persisted). */
   updateSettings: (patch: Partial<Settings>) => void;
-  /** Persist current settings and apply side effects (font size). */
   commitSettings: () => void;
 
   view: ViewId;
   navigate: (view: ViewId) => void;
 
   connection: ConnectionStatus;
-  /** Every FreeShow project on the machine. */
   projects: Project[];
-  /** The project being used as "the service" — its items feed every view. */
   activeProject: Project | null;
   selectProject: (id: string) => void;
-  /** Items of the active project. */
   serviceItems: ServiceItem[];
+  /** Fully-resolved shows, keyed by id — slides, groups and notes. */
+  shows: Map<string, ShowDetail>;
   liveItem: LiveItem | null;
-  /** Text currently on the screens (`get_output_slide_text`). */
+  /** Text currently on the screens. */
   outputText: string;
-  blanked: boolean;
 
-  refresh: () => void;
+  /** Installed bibles, and the one currently loaded. */
+  bibles: BibleInfo[];
+  bible: Bible | null;
+  loadBible: (id: string) => void;
+
   goNext: () => void;
   goPrev: () => void;
+  /** Put a show on screen (the SHOW + index_select_slide two-step). */
   activateItem: (id: string) => void;
   jumpToSlide: (showId: string | null, slide: number) => void;
-  toggleBlank: () => void;
   showScripture: (reference: string) => void;
   verseNext: () => void;
   versePrev: () => void;
@@ -79,23 +91,27 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
 
   const [settings, setSettings] = useState<Settings>(initial);
   /**
-   * The *committed* connection. `settings.host` changes on every keystroke in
-   * the Settings field, and keying the polling link off that tore the
-   * connection down and rebuilt it per character. The link follows this
-   * instead, so it only moves when the user actually saves.
+   * The *committed* connection. `settings` changes on every keystroke in the
+   * Settings fields; keying the socket off that would tear it down and rebuild
+   * it per character.
    */
-  const [conn, setConn] = useState({ host: initial.host, port: initial.port });
+  const [conn, setConn] = useState({
+    host: initial.host,
+    port: initial.port,
+    password: initial.password,
+  });
   const [view, setView] = useState<ViewId>(
     isConfigured(initial) ? initial.defaultRole : 'settings',
   );
   const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [liveItem, setLiveItem] = useState<LiveItem | null>(null);
-  const [outputText, setOutputText] = useState('');
-  const [blanked, setBlanked] = useState(false);
+  const [shows, setShows] = useState<Map<string, ShowDetail>>(new Map());
+  const [position, setPosition] = useState<OutputPosition | null>(null);
+  const [scriptureItem, setScriptureItem] = useState<LiveItem | null>(null);
+  const [bibles, setBibles] = useState<BibleInfo[]>([]);
+  const [bible, setBible] = useState<Bible | null>(null);
 
-  // Apply the reading-font-size class on mount and whenever it changes.
   useEffect(() => {
     applyFontSize(settings.fontSize);
   }, [settings.fontSize]);
@@ -104,94 +120,122 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
     projects.find((p) => p.id === activeProjectId) ?? projects[0] ?? null;
   const serviceItems = activeProject?.items ?? [];
 
-  // Mirrored in a ref so `refresh` can read the current selection without
-  // taking it as a dependency (it is called from the polling link's callbacks).
-  const activeIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    activeIdRef.current = activeProjectId;
-  }, [activeProjectId]);
-
   /**
-   * `get_projects` may hand back projects without their items, so the chosen
-   * project is topped up with `get_project` when it comes back empty.
+   * Scripture wins when it is live, because FreeShow inlines it into the
+   * output rather than pointing at a show.
    */
-  const refresh = useCallback(() => {
-    void (async () => {
-      let list: Project[];
-      try {
-        list = await fetchProjects();
-      } catch {
-        return; // offline — the banner already says so
-      }
-      setProjects(list);
+  const liveItem = useMemo<LiveItem | null>(() => {
+    if (scriptureItem) return scriptureItem;
+    if (!position) return null;
+    return buildLiveItem(position, shows.get(position.showId ?? '') ?? null);
+  }, [scriptureItem, position, shows]);
 
-      const prev = activeIdRef.current;
-      const chosen =
-        (prev ? list.find((p) => p.id === prev) : undefined) ??
-        list.find((p) => p.active) ??
-        list[0];
-      activeIdRef.current = chosen?.id ?? null;
-      setActiveProjectId(chosen?.id ?? null);
+  const outputText = liveItem?.text ?? '';
 
-      if (chosen && chosen.items.length === 0) {
-        try {
-          const full = await fetchProject(chosen.id);
-          if (full) {
-            setProjects((ps) => ps.map((p) => (p.id === full.id ? full : p)));
-          }
-        } catch {
-          /* leave the project item-less; the view shows its empty state */
-        }
-      }
-    })();
+  // RemoteShow pushes PROJECTS and SHOWS independently and in either order, so
+  // the raw projects are kept until the show index needed to name them arrives.
+  const rawProjects = useRef<unknown>(null);
+  const showIndex = useRef<ShowIndex>(new Map());
+  const showsRef = useRef(shows);
+  showsRef.current = shows;
+  /**
+   * Which show we last asked for. The `SHOW` reply does not echo the id it is
+   * answering, so this is the only way to file it correctly — and it must be a
+   * ref, because the reply can arrive before React re-renders.
+   */
+  const pendingShow = useRef<string | null>(null);
+
+  const rebuildProjects = useCallback(() => {
+    if (rawProjects.current == null) return;
+    setProjects(normalizeProjects(rawProjects.current, showIndex.current));
   }, []);
 
-  // One app-wide connection, re-established when the saved host/port changes.
+  const handleMessage = useCallback(
+    (channel: string, data: unknown) => {
+      switch (channel) {
+        case 'SHOWS':
+          showIndex.current = normalizeShowIndex(data);
+          rebuildProjects();
+          break;
+
+        case 'PROJECTS':
+          rawProjects.current = data;
+          rebuildProjects();
+          break;
+
+        // Only OUT_DATA. `OUT` carries the same idea in a different shape —
+        // its `slide` is the index, not the slide object — so reading both
+        // would overwrite a good position with an empty one.
+        case 'OUT_DATA': {
+          const scripture = buildScriptureItem(data);
+          if (scripture) {
+            setScriptureItem(scripture);
+            setPosition(null);
+            break;
+          }
+          setScriptureItem(null);
+          const next = normalizeOutput(data);
+          setPosition(next);
+          // Pull the show definition once; it carries slides, groups and notes.
+          if (next.showId && !showsRef.current.has(next.showId)) {
+            pendingShow.current = next.showId;
+            requestShow(next.showId);
+          }
+          break;
+        }
+
+        case 'SHOW': {
+          const id = pendingShow.current ?? position?.showId ?? '';
+          if (!id) break;
+          pendingShow.current = null;
+          const detail = flattenShow(data, id);
+          if (detail) setShows((prev) => new Map(prev).set(id, detail));
+          break;
+        }
+
+        case 'SCRIPTURE':
+          setBibles(normalizeBibles(data));
+          break;
+
+        case 'GET_SCRIPTURE': {
+          const loaded = normalizeBible(data);
+          if (loaded) setBible(loaded);
+          break;
+        }
+      }
+    },
+    [position?.showId, rebuildProjects],
+  );
+
+  const handleMessageRef = useRef(handleMessage);
+  handleMessageRef.current = handleMessage;
+
+  // One app-wide socket, rebuilt only when the saved connection changes.
   const configured = conn.host.trim().length > 0;
   useEffect(() => {
     if (!configured) return;
-    resetTransportState();
     let alive = true;
-    let previous: ConnectionStatus = 'disconnected';
-    const isUp = (s: ConnectionStatus) => s === 'connected' || s === 'send-only';
-
-    const link = new FreeShowLink({
+    connect(conn, {
       onStatus: (status) => {
-        if (!alive) return;
-        // Reload the service whenever we come back from a bad state.
-        if (isUp(status) && !isUp(previous)) refresh();
-        previous = status;
-        setConnection(status);
+        if (alive) setConnection(status);
       },
-      onSnapshot: ({ text, live }) => {
-        if (!alive) return;
-        if (text !== undefined) setOutputText(text);
-        // `null` is a real answer — nothing is live — so it must clear, or a
-        // finished song stays highlighted as live forever.
-        if (live !== undefined) setLiveItem(live);
-      },
-      onOutputActive: (active) => {
-        if (alive && active !== null) setBlanked(!active);
+      onMessage: (channel, data) => {
+        if (alive) handleMessageRef.current(channel, data);
       },
     });
-    link.start();
     return () => {
       alive = false;
-      link.stop();
+      disconnect();
       setConnection('disconnected');
     };
-  }, [configured, conn.host, conn.port, refresh]);
+  }, [configured, conn]);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  // Mirrored so `commitSettings` can read the current draft without being
-  // rebuilt on every edit.
   const settingsRef = useRef(settings);
-  useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
+  settingsRef.current = settings;
 
   const commitSettings = useCallback(() => {
     const draft = settingsRef.current;
@@ -200,52 +244,28 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
     setConn({
       host: draft.host.trim(),
       port: draft.port.trim() || DEFAULT_SETTINGS.port,
+      password: draft.password.trim(),
     });
   }, []);
 
   const navigate = useCallback((next: ViewId) => setView(next), []);
+  const selectProject = useCallback((id: string) => setActiveProjectId(id), []);
 
-  const selectProject = useCallback((id: string) => {
-    activeIdRef.current = id;
-    setActiveProjectId(id);
-    void (async () => {
-      try {
-        const full = await fetchProject(id);
-        if (full) setProjects((ps) => ps.map((p) => (p.id === id ? full : p)));
-      } catch {
-        /* keep whatever we already had */
-      }
-    })();
-  }, []);
-
-  const goNext = useCallback(() => {
-    nextSlide().catch(() => undefined);
-  }, []);
-  const goPrev = useCallback(() => {
-    previousSlide().catch(() => undefined);
-  }, []);
+  const goNext = useCallback(() => nextSlide(), []);
+  const goPrev = useCallback(() => previousSlide(), []);
   const activateItem = useCallback((id: string) => {
-    activateProjectItem(id).catch(() => undefined);
+    if (!showsRef.current.has(id)) pendingShow.current = id;
+    selectShow(id);
   }, []);
   const jumpToSlide = useCallback((showId: string | null, slide: number) => {
-    selectSlideIndex(slide, showId ?? undefined).catch(() => undefined);
-  }, []);
-  const toggleBlank = useCallback(() => {
-    // Optimistic toggle (Android-Auto: instant feedback); the poll confirms.
-    setBlanked((prev) => {
-      toggleOutput().catch(() => undefined);
-      return !prev;
-    });
+    if (showId) selectSlide(showId, slide);
   }, []);
   const showScripture = useCallback((reference: string) => {
-    startScripture(reference).catch(() => undefined);
+    startScripture(reference);
   }, []);
-  const verseNext = useCallback(() => {
-    scriptureNext().catch(() => undefined);
-  }, []);
-  const versePrev = useCallback(() => {
-    scripturePrevious().catch(() => undefined);
-  }, []);
+  const verseNext = useCallback(() => scriptureNext(), []);
+  const versePrev = useCallback(() => scripturePrevious(), []);
+  const loadBible = useCallback((id: string) => requestScripture(id), []);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -259,15 +279,16 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       activeProject,
       selectProject,
       serviceItems,
+      shows,
       liveItem,
       outputText,
-      blanked,
-      refresh,
+      bibles,
+      bible,
+      loadBible,
       goNext,
       goPrev,
       activateItem,
       jumpToSlide,
-      toggleBlank,
       showScripture,
       verseNext,
       versePrev,
@@ -283,15 +304,16 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       activeProject,
       selectProject,
       serviceItems,
+      shows,
       liveItem,
       outputText,
-      blanked,
-      refresh,
+      bibles,
+      bible,
+      loadBible,
       goNext,
       goPrev,
       activateItem,
       jumpToSlide,
-      toggleBlank,
       showScripture,
       verseNext,
       versePrev,

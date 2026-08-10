@@ -12,6 +12,7 @@ export function SongView(): ReactNode {
   const {
     navigate,
     serviceItems,
+    shows,
     liveItem,
     outputText,
     settings,
@@ -82,7 +83,9 @@ export function SongView(): ReactNode {
 
         {songs.map((song, i) => {
           const live = isLive(song.id);
-          const total = live && liveItem ? liveItem.total : song.slides ?? 0;
+          // Slide counts come from the show definition, so they are known for
+          // songs that aren't live yet — the pills work before you tap.
+          const total = shows.get(song.id)?.slides.length ?? (live ? liveItem?.total ?? 0 : 0);
           const slide = live && liveItem ? liveItem.slide : 0;
           return (
             <div

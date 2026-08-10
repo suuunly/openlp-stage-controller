@@ -14,14 +14,15 @@ describe('storage', () => {
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
   });
 
-  it('defaults to FreeShow’s API port', () => {
-    expect(DEFAULT_SETTINGS.port).toBe('5506');
+  it('defaults to RemoteShow’s port', () => {
+    expect(DEFAULT_SETTINGS.port).toBe('5510');
   });
 
   it('round-trips settings through localStorage', () => {
     saveSettings({
       host: '10.0.0.5',
-      port: '5506',
+      port: '5510',
+      password: '6897',
       fontSize: 'large',
       defaultRole: 'songs',
       nextPreview: false,
@@ -38,7 +39,7 @@ describe('storage', () => {
     saveSettings({ ...DEFAULT_SETTINGS, host: '  192.168.0.2  ', port: '' });
     const loaded = loadSettings();
     expect(loaded.host).toBe('192.168.0.2');
-    expect(loaded.port).toBe('5506');
+    expect(loaded.port).toBe('5510');
   });
 
   it('ignores invalid persisted enum values', () => {
@@ -80,7 +81,7 @@ describe('migration off the OpenLP build', () => {
     // An OpenLP host must not read as "configured" — the device has to be
     // pointed at FreeShow deliberately.
     expect(loaded.host).toBe('');
-    expect(loaded.port).toBe('5506');
+    expect(loaded.port).toBe('5510');
     expect(isConfigured(loaded)).toBe(false);
   });
 
