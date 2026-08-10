@@ -2,18 +2,20 @@
 
 > Persistent project memory for Claude Code. Read this first every session.
 
-> ## ⚠️ STATUS: MIGRATED TO FREESHOW — NOT YET VERIFIED LIVE
+> ## ✅ STATUS: WORKING AGAINST A LIVE FREESHOW (1.6.4), 2026-08-10
 >
-> The integration layer now speaks FreeShow's action API, and all five views are built.
-> **Nothing here has been run against a real FreeShow instance.** Every payload shape in
-> `src/lib/api.ts` is normalised defensively precisely because it is a guess.
+> Connects, lists real projects and shows, switches the live show, follows the operator,
+> and renders real slide text, counters and notes. Verified from the production bundle
+> against Jóhann's FreeShow.
 >
-> - Jóhann directed the build to go ahead on 2026-08-08 **without** running TASK-00 first.
->   §10.1's four unknowns (CORS, auth, static hosting, the three API gaps) are therefore
->   still unanswered — they are now assumptions baked into shipped code, not open questions
->   on paper. **Settings → Test Connection runs them as live probes; use it on site.**
+> - **The transport is RemoteShow's protocol on port 5510**, not the documented API.
+>   §8 explains why the documented one cannot work from a browser. Read it before touching
+>   `src/lib/`.
+> - Payload shapes are **verified, not guessed** — see the Usable fragment
+>   `676e0d9c-7d01-4a03-8a0a-b50e5ba0f94f`.
+> - Still to do: the Bible cascading picker, image thumbnails, the protocol compatibility
+>   check, and TASK-08/09. §10.7 has the current state.
 > - The repo/folder is still named `openlp-stage-controller` — renaming is deferred, not forgotten.
-> - §10 is the migration brief and records what was decided and why.
 
 ---
 
@@ -57,9 +59,9 @@ The tech operator keeps full control of FreeShow; this app is **additive**.
 > The behavioral acceptance criteria still apply; the "no bundler" wording in the older task
 > fragments is superseded.
 >
-> ✅ **Resolved (§10.4):** FreeShow's push transport is socket.io, which we did **not** take
-> as a dependency. `src/lib/realtime.ts` polls the REST API every 1s instead — the app almost
-> only sends, and observing the operator a second late costs nothing. Still zero runtime deps.
+> ✅ **Resolved (§10.4, revised 2026-08-10):** the transport is socket.io — but spoken over a
+> **raw `WebSocket`** in `src/lib/socket.ts`, so it is still zero runtime dependencies.
+> RemoteShow *pushes* state, so there is no polling loop at all (`realtime.ts` is gone).
 
 ---
 
@@ -77,10 +79,10 @@ The tech operator keeps full control of FreeShow; this app is **additive**.
 │   ├── state/AppContext.tsx   # app-wide state: settings, view, connection, live item,
 │   │                          #   service items, blanked + action helpers + the ONE socket
 │   ├── lib/
-│   │   ├── types.ts           # Settings, ItemKind, ServiceItem, Project, LiveItem…
+│   │   ├── types.ts           # Settings, ItemKind, ServiceItem, Project, Slide, Bible…
 │   │   ├── storage.ts         # localStorage load/save, STORAGE_KEYS, legacy-key migration
-│   │   ├── api.ts             # sendAction() + typed actions, normalizers, runDiagnostics()
-│   │   └── realtime.ts        # FreeShowLink: 1s REST poll, backoff, status callbacks
+│   │   ├── socket.ts          # FreeShowSocket: socket.io v4 over a raw WebSocket
+│   │   └── api.ts             # the one socket, typed commands, normalizers
 │   ├── hooks/
 │   │   ├── useTapGuard.ts     # direction-keyed debounce (iOS ghost double-fire fix)
 │   │   └── useSwipe.ts        # swipe left=next / right=prev
@@ -89,7 +91,8 @@ The tech operator keeps full control of FreeShow; this app is **additive**.
 │   │                          #   ImagesView, PresentationView (+ .module.css)
 │   ├── styles/                # fonts.css, tokens.css, global.css
 │   ├── assets/fonts/          # self-hosted woff2
-│   └── test/setup.ts          # jest-dom, offline-by-default fetch stub, storage reset
+│   ├── test/setup.ts          # jest-dom, MockWebSocket install, storage reset
+│   └── test/mockSocket.ts     # drives the RemoteShow handshake in tests
 └── e2e/                       # Playwright specs (smoke.spec.ts)
 ```
 
@@ -122,14 +125,13 @@ Options, best first — see PRD §7:
 
 Keep `base: './'` regardless — it serves A and B equally well.
 
-> ⚠️ **CORS is still unvalidated.** Under OpenLP the app was same-origin, so it never came
-> up; every option above is cross-origin to FreeShow's API. The code no longer *dies* if this
-> goes badly — `sendAction` falls back to opaque `no-cors` requests so commands still land,
-> and the app reports `send-only` (§8) — but live read-back would be lost, which guts the
-> Bible view's reading pane and the song read-along. **Check it on site** (§10.1 #2).
+> ✅ **CORS is no longer a constraint** — it was the reason the REST API is unusable, and it
+> is precisely why the app talks over a WebSocket instead (§8). WebSockets are exempt.
 >
-> Option A stays the recommendation, and if a static-hosting hole is ever found inside
-> FreeShow (§10.1 #4), same-origin hosting moots the whole question.
+> ⚠️ **Mixed content still rules out HTTPS hosting.** An `https://` page cannot open a
+> `ws://` socket, and FreeShow offers no `wss://`. So option C is dead for the app itself —
+> not because of CORS, but because the page must be served over plain HTTP for the socket to
+> open at all. Option A remains the recommendation.
 
 ---
 
@@ -138,7 +140,12 @@ Keep `base: './'` regardless — it serves A and B equally well.
 - **Workspace:** `Elim` — ID `cd1e08b9-4065-432f-ac03-d3e8f673f7fd` (pass `workspaceId` on every call).
 - **PRD:** `8e8f34db-84bd-40ff-b162-5c4012307fde` — *PRD — FreeShow Stage Remote Controller* (v0.2, retargeted)
 - **FreeShow format/API knowledge:**
-  - `b3df35f0-490d-45f6-b50d-21596f12f889` — **FreeShow control API: transports, actions, and the three gaps.** Read this before touching `src/lib/`.
+  - `676e0d9c-7d01-4a03-8a0a-b50e5ba0f94f` — ⭐ **RemoteShow protocol (5510) — VERIFIED LIVE.**
+    The wire format, every payload shape, and why the documented API can't be used from a
+    browser. **Read this before touching `src/lib/`.**
+  - `7d28ea57-d588-4f2c-9672-4f59cca8b2a9` — TASK-10, contributing the findings upstream
+  - `b3df35f0-490d-45f6-b50d-21596f12f889` — the docs-derived note the above corrects
+    (carries a correction banner; several of its central claims are wrong)
   - `1c9a3d51-6aa9-4fa2-a6c1-32e757f611b8` — FreeShow Bible import: json-bible spec + local validation
   - `a6a85914-83f9-4eaa-acce-3f0e47f92e6b` — Converting an OpenLP SQLite Bible to `.fsb`
   - `d96b791f-229c-478d-a286-52622905c38f` — Gotcha: duplicated books in the Faroese Bible
@@ -171,14 +178,15 @@ still stand.
 | TASK-02 — Home / Role Selector View           | `c16c86b1-9522-43c6-89f5-7414e2222da9` | 1 | ✅ Done — protocol-agnostic |
 | TASK-03 — Real-Time Connection & State        | `073e880c-aa74-4460-bff4-fba49aaa3068` | 1 | ✅ Reworked — 1s REST poll (`FreeShowLink`), no socket.io |
 | TASK-04 — Song Navigator View                 | `2664c59e-4630-498e-af15-8ddacab134b4` | 1 | ✅ Remapped to projects/shows + `get_output_slide_text` |
-| TASK-05 — Bible Verse View                     | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | ✅ Built via strategy A (free-text). **Preview-before-showing not met** — needs the bundled `.fsb` (§10.6) |
-| TASK-06 — Images View                          | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | ✅ Built as a titled list — no thumbnail action exists (§10.6) |
-| TASK-07 — Presentation View                    | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | ✅ Built without notes or thumbnails — neither is exposed (§10.6) |
-| TASK-08 — Polish, Error States & UX            | `a1dac5cf-9720-42b0-93b1-3465c1ef2f02` | 4 | 🔲 Todo — mostly unaffected |
-| TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — **blocked on the hosting decision (§4)** |
+| TASK-05 — Bible Verse View                     | `bcbbab57-7104-4a33-a3fb-014dd1078956` | 2 | ⚠️ Free-text entry works. **`GET_SCRIPTURE` makes the original Book ▸ Chapter ▸ Verse picker and preview-before-showing buildable — not yet wired into the view** |
+| TASK-06 — Images View                          | `3eec9c67-a2aa-4317-ac8f-9cbf0f2142ab` | 2 | ⚠️ Titled list. **`API:get_thumbnail` exists and `fetchThumbnail()` is written — the view doesn't call it yet** |
+| TASK-07 — Presentation View                    | `2b983cc9-3840-43e7-8f31-4f9efbf72f0c` | 3 | ✅ Done — notes, counter, deck picker. Notes came back via `get_show` |
+| TASK-08 — Polish, Error States & UX            | `a1dac5cf-9720-42b0-93b1-3465c1ef2f02` | 4 | 🔲 Todo |
+| TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — hosting must be plain HTTP (§4) |
+| **TASK-10 — Upstream contributions to FreeShow** | `7d28ea57-d588-4f2c-9672-4f59cca8b2a9` | 6 | 🔲 Todo — draft only. **Do not file without Jóhann's review** |
 
-⚠️ **"Done" here means built and green under test, never proven against a live FreeShow.**
-Order from here: verify on site (§10.1) → TASK-08 → TASK-09.
+Order from here: TASK-05 picker → TASK-06 thumbnails → protocol compatibility check
+(§10.7) → TASK-08 → TASK-09 → TASK-10.
 
 ### ⚠️ Phase 1's "verified live" status is unproven
 
@@ -217,71 +225,89 @@ seconds. **Do that before a Sunday, not during one.**
 
 ---
 
-## 8. API Pattern — FreeShow
+## 8. API Pattern — RemoteShow over a raw WebSocket
 
-### Current implementation
+> Verified live against FreeShow **1.6.4** on 2026-08-10. Full detail and raw payloads:
+> Usable `676e0d9c-7d01-4a03-8a0a-b50e5ba0f94f`.
 
-Every network call goes through **`sendAction(action, data)`** (`src/lib/api.ts`), which
-issues `GET http://<host>:5506/?action=…&data=…`. GET is deliberate: with no custom headers
-it is a CORS *simple request*, so it never triggers a preflight, and it is the only form that
-can be replayed opaquely when the browser blocks the response.
+### Why not the documented API
 
-**The CORS fallback.** A browser reports a CORS rejection and a dead host identically, as a
-bare `TypeError`. So when a *command* fails that way, `sendAction` retries it with
-`mode: 'no-cors'` — the request still reaches FreeShow and executes; only the reply is
-withheld. The app then reports `send-only`: PREV/NEXT/SHOW all work, live read-back doesn't.
-Queries have nothing to salvage and fail loudly. This is what keeps §10.1's unanswered CORS
-question from being fatal.
+**The REST API on 5506 cannot be used from a browser.** The documented
+`GET /?action=…&data=…` form **404s** — the server is POST-and-JSON only, and it sends
+**no `Access-Control-*` headers at all** (`OPTIONS` answers a bare `Allow: POST`), so the
+preflight fails. There is no workaround: `mode:'no-cors'` downgrades the body to
+`text/plain`, which the server ignores.
 
-`src/lib/realtime.ts` runs **one** app-wide `FreeShowLink`, polling `get_output_slide_text`,
-`get_slide` and `get_output` every 1s, with the same 1→2→4…30s backoff the old socket had.
+**The socket API on 5505 works but is not sufficient.** It cannot change *which* show is
+live (`index_select_slide` silently does nothing unless FreeShow already has that show
+open), has no scripture browsing, and never pushes state.
 
-**Architectural rules (unchanged since OpenLP):**
-- Every network call goes through one helper in `src/lib/api.ts`.
-- **One** app-wide connection, owned by `AppContext`, started once configured. Views read
-  from context; they must **NOT** open their own.
-- Normalise defensively at the boundary; views consume clean typed domain objects
-  (`LiveItem`, `ServiceItem`, `Project`), never raw API shapes.
+**WebSockets are exempt from CORS.** That is the whole reason a browser client is possible.
 
-### Transports
+### What we use
 
-Docs: <https://freeshow.app/api>. **The API server is OFF by default** — it must be enabled
-under FreeShow → Settings → Connection. Expect this to be the #1 support question.
+`src/lib/socket.ts` speaks **socket.io v4 over a raw `WebSocket`** to **RemoteShow on
+5510** — no dependency, and it satisfies the offline-LAN rule (§9).
 
-Three transports, one action vocabulary:
-
-```js
-// WebSocket (socket.io!) — port 5505
-socket.emit("data", JSON.stringify({ action: ACTION_ID, ...data }))
-
-// HTTP GET — port 5506
-fetch(`http://<ip>:5506?action=${ACTION_ID}&data=${JSON.stringify(data)}`)
-
-// REST POST — port 5506
-fetch("http://<ip>:5506", { method: "POST", body: JSON.stringify({ action: ACTION_ID, ...data }) })
+```
+ws://<ip>:5510/socket.io/?EIO=4&transport=websocket
+  <- 0{"sid":…}                                  engine.io open
+  -> 40                                          connect default namespace
+  <- 40{"sid":…}                                 ready — sid is our client id
+  -> 42["REMOTE",{id,channel:"PASSWORD"}]        <- {dictionary, password:true}
+  -> 42["REMOTE",{id,channel:"ACCESS",data:"6897"}]
+  <- …PROJECTS, SHOWS, SCRIPTURE, CATEGORIES, OUT_DATA, SHOW…   (PUSHED)
+  <- 2  -> 3                                     ping / pong
 ```
 
-We use the **HTTP GET** form only. socket.io was rejected (§10.4); REST POST would trigger a
-CORS preflight and cannot be replayed with `no-cors`.
+**Auth:** RemoteShow requires the 4-digit code from FreeShow → Settings → Connection →
+click the RemoteShow row. Wrong code ⇒ `{channel:"ERROR", data:"wrongPass"}`, surfaced as
+the `unauthorized` connection status.
 
-### Endpoint → action mapping
+**State is pushed** — there is no polling loop. Commands go through the `API:` proxy
+(`API:next_slide`, `API:index_select_slide`, …); reads either arrive unprompted or are
+requested on a channel.
 
-| Purpose | 🔴 OpenLP (was) | ✅ FreeShow action (is) |
-|---|---|---|
-| Connectivity probe | `GET /api/v2/core/state` | `get_output` (no known dedicated ping) |
-| Next slide | `POST /controller/next-item` | `next_slide` |
-| Previous slide | `POST /controller/previous-item` | `previous_slide` |
-| Jump to slide | `POST /controller/show {id, slide}` | `index_select_slide` — `index`, optional `showId`, `layoutId` |
-| Service items | `GET /service/items` | `get_projects` |
-| Activate item | `POST /service/show {id}` | `id_select_project` — `id` |
-| Live item | `GET /controller/live-item` | `get_slide` — optional `showId` (`"active"`), `slideId` |
-| **On-screen text** | *(scraped from live-item HTML)* | `get_output_slide_text` — **use this for the singer read-along** |
-| Blank | `POST /controller/blank {display}` | `toggle_output` — `id` |
-| Show a verse | `POST /bibles/verse` | `start_scripture` — `reference: string`, optional `id` |
-| Verse navigation | *(unsupported)* | `scripture_next` / `scripture_previous` |
+### Two traps worth knowing before you debug anything
 
-Also available, currently unused: `random_slide`, `name_select_slide`, `change_transition`,
-`get_project`, `get_projects`, audio, timers, overlays, custom variables.
+1. **`OUT` and `OUT_DATA` are different shapes.** `OUT.slide` is an *index*; `OUT_DATA.slide`
+   is an *object*. Reading both overwrites good state with empty. We use `OUT_DATA` only.
+2. **`OUT_DATA` itself has two shapes.** A show live gives a pointer
+   (`{slide:{id, layout, index}}`); scripture live gives inline content
+   (`{slide:{id:"temp", tempItems, nextSlides, customDynamicValues}}`), with the reference
+   in `customDynamicValues.scripture_reference_full`. Relatedly `get_slide` returns `null`
+   and `get_output_slide_text` returns `""` whenever scripture is up.
+3. **Slides are hierarchical.** Layouts list *parent* slides, each with `children`; `index`
+   counts the **flattened** sequence. `flattenShow()` in `api.ts` does this — don't
+   reimplement it from `layouts[x].slides.length`.
+
+### Capability map
+
+| Purpose | Mechanism |
+|---|---|
+| Slide next / previous | `API:next_slide` / `API:previous_slide` |
+| Jump to slide | `API:index_select_slide` — `{showId, index}` |
+| **Switch the live show** | `SHOW <id>` **then** `API:index_select_slide` — the two-step is essential |
+| Service items | `PROJECTS` (pushed) joined with `SHOWS` for names + categories |
+| Slides, groups, **notes**, totals | `SHOW <id>` / `get_show` |
+| What's on screen | `OUT_DATA` (pushed) |
+| Show a verse | `API:start_scripture` — `{reference}` |
+| Verse next / previous | `API:scripture_next` / `API:scripture_previous` |
+| **Browse bibles** | `GET_SCRIPTURE` — `{id, bookKey?, chapterKey?, bookIndex?, chapterIndex?}` |
+| Installed bibles | `SCRIPTURE` (pushed) |
+| Thumbnails | `API:get_thumbnail` — `{path}` |
+
+**Only `SHOW` and `GET_SCRIPTURE` are RemoteShow-exclusive.** Everything else — including
+`get_show`, `get_thumbnail`, `get_plain_text`, `get_groups` — also works on the public API
+on 5505; it is merely undocumented. See TASK-10.
+
+### Architectural rules (unchanged since OpenLP)
+
+- Every network call goes through `src/lib/api.ts`.
+- **One** app-wide socket, owned by `AppContext`. Views read from context; they must
+  **NOT** open their own.
+- Normalise at the boundary; views consume `LiveItem` / `ServiceItem` / `Project` /
+  `ShowDetail`, never raw payloads.
 
 ---
 
@@ -389,3 +415,36 @@ view degrades honestly and says so in the UI rather than faking it:
 
 **RemoteShow browses Bibles and renders project items, so private mechanisms exist.**
 Inspecting its network traffic (TASK-00 B4) is still the highest-value unfinished work.
+
+### 10.7 The second rework — RemoteShow, verified live (2026-08-10)
+
+TASK-00 B4 got done, and it invalidated §10.6 almost entirely. Reading
+`http://<ip>:5510/client.js` gave RemoteShow's whole vocabulary; probing a running
+FreeShow settled every shape. §8 is the result; the raw findings are in Usable
+`676e0d9c-7d01-4a03-8a0a-b50e5ba0f94f`.
+
+**Five of the six "impossible" gaps closed:**
+
+| §10.6 said | Actually |
+|---|---|
+| No speaker notes | `get_show` → per-slide `notes` |
+| No slide totals for non-live items | `layouts` give order and count |
+| No next-slide preview | Falls out of the flattened slide sequence |
+| No bible browsing; preview needs a 5.7 MB `.fsb` | `GET_SCRIPTURE` returns the whole tree **including verse text** — verified against the Faroese Victor bible |
+| Songs vs presentations is guesswork | `SHOWS[id].category` is authoritative |
+| No thumbnails | Still true on the public API, but `API:get_thumbnail` exists |
+
+**What it cost:** the app now depends on a **private, undocumented protocol** and a
+4-digit password. Narrower than it first looked — only `SHOW` and `GET_SCRIPTURE` are
+RemoteShow-exclusive — but real. Mitigations:
+
+1. The protocol is **re-derivable** from the `client.js` FreeShow itself serves. That is
+   how it was obtained; it is a repeatable procedure, not a one-off.
+2. **Build the compatibility check** (not yet done): fetch that file and assert the
+   channels we rely on still exist. One command after any FreeShow update, rather than a
+   discovery mid-service.
+3. TASK-10 asks upstream for `select_show` and `get_scripture`. If they land, the private
+   dependency and the password both go away.
+
+**Still open:** the Bible picker and thumbnails are *possible* but not *built* — the data
+layer supports both and is tested; the views don't use them yet.
