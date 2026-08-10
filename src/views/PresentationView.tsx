@@ -47,12 +47,23 @@ export function PresentationView(): ReactNode {
 
   const swipe = useSwipe(next, prev);
 
-  const decks = serviceItems.filter((it) => it.kind === 'presentation');
+  // A project can list the same show twice; duplicate React keys and duplicate
+  // chips both follow from taking the list at face value.
+  const decks = serviceItems.filter(
+    (it, i, all) => it.kind === 'presentation' && all.findIndex((o) => o.id === it.id) === i,
+  );
   const liveId = liveItem?.id ?? null;
   const current = decks.find((d) => d.id === liveId) ?? null;
-  const slideText = outputText.trim() || liveItem?.text.trim() || '';
+
+  /**
+   * Only mirror the output when what's live is actually one of these decks.
+   * Otherwise a song or a bible verse renders here as though it were the
+   * current presentation — which on stage is worse than showing nothing.
+   */
+  const live = current !== null;
+  const slideText = live ? outputText.trim() || liveItem?.text.trim() || '' : '';
   const counter =
-    liveItem && liveItem.total > 0
+    live && liveItem && liveItem.total > 0
       ? `${liveItem.slide + 1} / ${liveItem.total}`
       : null;
 
@@ -96,14 +107,16 @@ export function PresentationView(): ReactNode {
             {slideText}
           </p>
         ) : (
-          <p className={styles.placeholder}>Nothing on the screens yet</p>
+          <p className={styles.placeholder}>
+            {liveItem
+              ? 'Something else is on the screens — tap a presentation to take over'
+              : 'Nothing on the screens yet'}
+          </p>
         )}
       </div>
 
       <p className={styles.notes}>
-        {liveItem?.notes?.trim()
-          ? liveItem.notes
-          : 'No notes for this slide'}
+        {live && liveItem?.notes?.trim() ? liveItem.notes : 'No notes for this slide'}
       </p>
 
       <footer className={styles.nav}>
