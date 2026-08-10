@@ -80,10 +80,16 @@ export type ConnectionStatus =
   | 'send-only'
   | 'disconnected';
 
-/** One snapshot of FreeShow's output, produced by the polling link. */
+/**
+ * One snapshot of FreeShow's output, produced by the polling link.
+ *
+ * Both fields distinguish **"couldn't read it"** (`undefined`) from **"read it,
+ * there's nothing"** (`''` / `null`). Collapsing the two makes a single failed
+ * request blank the read-along, and makes a stale live item stick forever.
+ */
 export interface OutputSnapshot {
   /** Text currently on the screens (`get_output_slide_text`). */
-  text: string;
-  /** Current slide of the active show (`get_slide`). */
-  live: LiveItem | null;
+  text?: string;
+  /** Current slide of the active show (`get_slide`); null = nothing live. */
+  live?: LiveItem | null;
 }

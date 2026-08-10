@@ -52,6 +52,50 @@ describe('FreeShowLink', () => {
     expect(snapshots[0].live?.total).toBe(4);
   });
 
+  it('leaves a field undefined when only that one call fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const action = actionOf(url);
+        if (action === 'get_output_slide_text') throw new TypeError('Failed to fetch');
+        const body =
+          action === 'get_slide'
+            ? JSON.stringify({ showId: 's1', index: 0, total: 2 })
+            : JSON.stringify({ enabled: true });
+        return { ok: true, text: async () => body };
+      }),
+    );
+
+    const { snapshots, link } = collect();
+    link.start();
+    await vi.waitFor(() => expect(snapshots.length).toBeGreaterThan(0));
+    link.stop();
+
+    // undefined, not '' — the app must keep the read-along it already had
+    // rather than blanking it on one dropped request.
+    expect(snapshots[0].text).toBeUndefined();
+    expect(snapshots[0].live?.id).toBe('s1');
+  });
+
+  it('reports null — not undefined — when FreeShow says nothing is live', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const body = actionOf(url) === 'get_slide' ? 'null' : '""';
+        return { ok: true, text: async () => body };
+      }),
+    );
+
+    const { snapshots, link } = collect();
+    link.start();
+    await vi.waitFor(() => expect(snapshots.length).toBeGreaterThan(0));
+    link.stop();
+
+    // A successful read of "nothing" has to clear the live item, or a finished
+    // song stays highlighted as live forever.
+    expect(snapshots[0].live).toBeNull();
+  });
+
   it('reports disconnected when nothing answers at all', async () => {
     // The default test fetch rejects everything, opaque probe included.
     const { statuses, link } = collect();

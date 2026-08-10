@@ -112,7 +112,10 @@ export function BibleView(): ReactNode {
     return () => window.removeEventListener('keydown', onKey);
   }, [next, prev]);
 
-  const verse = outputText.trim();
+  // Only mirror the screens once a verse has been shown from here. The pane
+  // reads back whatever is on the output, which before that is the song the
+  // band is on — under a "Bible Verses" heading that is just confusing.
+  const verse = shown ? outputText.trim() : '';
 
   return (
     <section className={styles.view}>
@@ -178,7 +181,7 @@ export function BibleView(): ReactNode {
         <div className={styles.reading}>
           <div className={styles.readingHead}>
             <span className={styles.refLabel}>{shown ?? 'Nothing shown yet'}</span>
-            <span className={styles.onScreen}>ON SCREEN</span>
+            {shown && <span className={styles.onScreen}>ON SCREEN</span>}
           </div>
 
           <div className={styles.verseWrap}>
@@ -192,9 +195,11 @@ export function BibleView(): ReactNode {
               </p>
             ) : (
               <p className={styles.empty}>
-                {canReadBack
-                  ? 'The verse will appear here once it is on the screens'
-                  : 'Live text unavailable — verses are still sent to the screens'}
+                {!canReadBack
+                  ? 'Live text unavailable — verses are still sent to the screens'
+                  : shown
+                    ? 'Waiting for the screens…'
+                    : 'Type a reference and tap SHOW ON SCREEN — the verse appears here'}
               </p>
             )}
           </div>

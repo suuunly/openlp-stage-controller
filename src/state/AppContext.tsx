@@ -23,6 +23,7 @@ import {
 } from '../lib/api';
 import { FreeShowLink } from '../lib/realtime';
 import {
+  DEFAULT_SETTINGS,
   applyFontSize,
   isConfigured,
   loadSettings,
@@ -77,6 +78,13 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
   const initial = useRef(loadSettings()).current;
 
   const [settings, setSettings] = useState<Settings>(initial);
+  /**
+   * The *committed* connection. `settings.host` changes on every keystroke in
+   * the Settings field, and keying the polling link off that tore the
+   * connection down and rebuilt it per character. The link follows this
+   * instead, so it only moves when the user actually saves.
+   */
+  const [conn, setConn] = useState({ host: initial.host, port: initial.port });
   const [view, setView] = useState<ViewId>(
     isConfigured(initial) ? initial.defaultRole : 'settings',
   );
@@ -138,8 +146,8 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
     })();
   }, []);
 
-  // One app-wide connection, re-established when the host/port changes.
-  const configured = isConfigured(settings);
+  // One app-wide connection, re-established when the saved host/port changes.
+  const configured = conn.host.trim().length > 0;
   useEffect(() => {
     if (!configured) return;
     resetTransportState();
@@ -157,8 +165,10 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       },
       onSnapshot: ({ text, live }) => {
         if (!alive) return;
-        setOutputText(text);
-        setLiveItem((prev) => live ?? prev);
+        if (text !== undefined) setOutputText(text);
+        // `null` is a real answer — nothing is live — so it must clear, or a
+        // finished song stays highlighted as live forever.
+        if (live !== undefined) setLiveItem(live);
       },
       onOutputActive: (active) => {
         if (alive && active !== null) setBlanked(!active);
@@ -170,17 +180,26 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
       link.stop();
       setConnection('disconnected');
     };
-  }, [configured, settings.host, settings.port, refresh]);
+  }, [configured, conn.host, conn.port, refresh]);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  // Mirrored so `commitSettings` can read the current draft without being
+  // rebuilt on every edit.
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
   const commitSettings = useCallback(() => {
-    setSettings((prev) => {
-      saveSettings(prev);
-      applyFontSize(prev.fontSize);
-      return prev;
+    const draft = settingsRef.current;
+    saveSettings(draft);
+    applyFontSize(draft.fontSize);
+    setConn({
+      host: draft.host.trim(),
+      port: draft.port.trim() || DEFAULT_SETTINGS.port,
     });
   }, []);
 

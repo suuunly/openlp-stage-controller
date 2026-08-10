@@ -105,9 +105,11 @@ export function SongView(): ReactNode {
                   <div className={styles.songTitle}>{song.title}</div>
                   {song.notes && <div className={styles.songAuthor}>{song.notes}</div>}
                 </div>
-                <div className={`${styles.count} ${live ? styles.countLive : ''}`}>
-                  {live && total ? `Slide ${slide + 1} / ${total}` : total ? `${total} slides` : ''}
-                </div>
+                {total > 0 && (
+                  <div className={`${styles.count} ${live ? styles.countLive : ''}`}>
+                    {live ? `Slide ${slide + 1} / ${total}` : `${total} slides`}
+                  </div>
+                )}
               </div>
 
               {live && total > 0 && (

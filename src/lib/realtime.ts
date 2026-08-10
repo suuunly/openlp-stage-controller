@@ -67,9 +67,12 @@ export class FreeShowLink {
     if (anyOk) {
       this.delay = POLL_INTERVAL;
       this.cb.onStatus(isSendOnly() ? 'send-only' : 'connected');
+      // Only report what was actually read. A field left undefined means "this
+      // one call failed" and the app keeps its previous value; `''`/`null` mean
+      // FreeShow genuinely has nothing on screen.
       this.cb.onSnapshot({
-        text: text.status === 'fulfilled' ? text.value : '',
-        live: live.status === 'fulfilled' ? live.value : null,
+        text: text.status === 'fulfilled' ? text.value : undefined,
+        live: live.status === 'fulfilled' ? live.value : undefined,
       });
       if (output.status === 'fulfilled') {
         this.cb.onOutputActive?.(readOutputActive(output.value));
