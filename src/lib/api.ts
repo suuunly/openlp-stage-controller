@@ -95,12 +95,21 @@ export const selectShow = (showId: string, index = 0): void =>
 /**
  * Put a media file on screen.
  *
- * Images are **not** shows: `id_select_project` makes FreeShow complain
- * "Received trigger to start slide, but no show active". RemoteShow uses
- * `play_media` with the file path and its type.
+ * Two things about this are non-obvious:
+ *
+ * 1. Images are **not** shows. `id_select_project` makes FreeShow complain
+ *    "Received trigger to start slide, but no show active"; media goes through
+ *    `play_media` with the file path and its type.
+ * 2. It lands on the **background** layer, so whatever slide text was live
+ *    stays on top of it — an image shown after a song appears as a backdrop
+ *    with the lyrics still over it. Clearing the slide layer first is what
+ *    makes it read as a photo.
  */
 export const playMedia = (path: string, type: 'image' | 'video' = 'image'): void =>
-  fire((s) => s.api('play_media', { path, data: { type } }));
+  fire((s) => {
+    s.api('clear_slide');
+    s.api('play_media', { path, data: { type } });
+  });
 
 export const clearOutput = (): void => fire((s) => s.api('clear_all'));
 export const clearSlide = (): void => fire((s) => s.api('clear_slide'));
