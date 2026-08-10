@@ -7,7 +7,7 @@ test('first run: configure then land on the role picker', async ({ page }) => {
   // Settings is the entry view when unconfigured.
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await expect(page.getByPlaceholder('5510')).toBeVisible();
-  await expect(page.getByPlaceholder('6897')).toBeVisible();
+  await expect(page.getByPlaceholder('0000')).toBeVisible();
 
   await page.getByPlaceholder('192.168.1.50').fill('192.168.1.50');
   await page.getByRole('button', { name: /Connect|Go to Stage/i }).click();

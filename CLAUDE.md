@@ -259,7 +259,7 @@ ws://<ip>:5510/socket.io/?EIO=4&transport=websocket
   -> 40                                          connect default namespace
   <- 40{"sid":…}                                 ready — sid is our client id
   -> 42["REMOTE",{id,channel:"PASSWORD"}]        <- {dictionary, password:true}
-  -> 42["REMOTE",{id,channel:"ACCESS",data:"6897"}]
+  -> 42["REMOTE",{id,channel:"ACCESS",data:"<4-digit code>"}]
   <- …PROJECTS, SHOWS, SCRIPTURE, CATEGORIES, OUT_DATA, SHOW…   (PUSHED)
   <- 2  -> 3                                     ping / pong
 ```

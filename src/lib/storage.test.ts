@@ -22,7 +22,7 @@ describe('storage', () => {
     saveSettings({
       host: '10.0.0.5',
       port: '5510',
-      password: '6897',
+      password: '1234',
       fontSize: 'large',
       defaultRole: 'songs',
       nextPreview: false,

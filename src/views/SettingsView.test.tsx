@@ -16,7 +16,7 @@ function renderApp() {
 
 async function configure(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText('192.168.1.50'), '10.0.0.5');
-  await user.type(screen.getByPlaceholderText('6897'), '1234');
+  await user.type(screen.getByPlaceholderText('0000'), '1234');
   await user.click(screen.getByRole('button', { name: /Connect|Go to Stage/i }));
 }
 
@@ -114,7 +114,7 @@ describe('Settings → leaving the view', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /Settings/i }));
-    await user.type(screen.getByPlaceholderText('6897'), '4321');
+    await user.type(screen.getByPlaceholderText('0000'), '4321');
     await user.click(screen.getByRole('button', { name: 'Back to home' }));
 
     expect(localStorage.getItem(STORAGE_KEYS.password)).toBe('4321');

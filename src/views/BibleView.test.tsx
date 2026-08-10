@@ -37,7 +37,7 @@ const VICTOR = {
 function renderBibleView() {
   localStorage.setItem(STORAGE_KEYS.host, '10.0.0.5');
   localStorage.setItem(STORAGE_KEYS.port, '5510');
-  localStorage.setItem(STORAGE_KEYS.password, '6897');
+  localStorage.setItem(STORAGE_KEYS.password, '1234');
   localStorage.setItem(STORAGE_KEYS.defaultRole, 'bible');
   const view = render(
     <AppProvider>

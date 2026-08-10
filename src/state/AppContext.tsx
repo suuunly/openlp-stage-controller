@@ -140,9 +140,14 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
   const showsRef = useRef(shows);
   showsRef.current = shows;
   /**
-   * Which show we last asked for. The `SHOW` reply does not echo the id it is
-   * answering, so this is the only way to file it correctly — and it must be a
-   * ref, because the reply can arrive before React re-renders.
+   * Which show we last asked for.
+   *
+   * The `SHOW` reply does not echo the id it is answering, so this is the only
+   * way to file it correctly — and it must be a ref, because the reply can
+   * arrive before React re-renders. **Every** `SHOW` request has to claim its
+   * reply: `selectShow()` sends `SHOW` unconditionally, so skipping this for an
+   * already-cached show left the reply to be filed under whatever was
+   * previously live, overwriting that show's slides with another's.
    */
   const pendingShow = useRef<string | null>(null);
 
@@ -186,7 +191,10 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
         }
 
         case 'SHOW': {
-          const id = pendingShow.current ?? position?.showId ?? '';
+          // No claim, no filing. An unsolicited SHOW push (RemoteShow sends one
+          // on connect) belongs to no request we made, and guessing from the
+          // live position files it under the wrong show.
+          const id = pendingShow.current;
           if (!id) break;
           pendingShow.current = null;
           const detail = flattenShow(data, id);
@@ -205,7 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
         }
       }
     },
-    [position?.showId, rebuildProjects],
+    [rebuildProjects],
   );
 
   const handleMessageRef = useRef(handleMessage);
@@ -255,7 +263,9 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
   const goNext = useCallback(() => nextSlide(), []);
   const goPrev = useCallback(() => previousSlide(), []);
   const activateItem = useCallback((id: string) => {
-    if (!showsRef.current.has(id)) pendingShow.current = id;
+    // selectShow() always sends SHOW, so always claim the reply — a cached
+    // show still produces one, and an unclaimed reply gets misfiled.
+    pendingShow.current = id;
     selectShow(id);
   }, []);
   const jumpToSlide = useCallback((showId: string | null, slide: number) => {

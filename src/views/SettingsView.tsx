@@ -109,7 +109,7 @@ export function SettingsView(): ReactNode {
                 className={`${styles.input} ${styles.mono}`}
                 type="text"
                 inputMode="numeric"
-                placeholder="6897"
+                placeholder="0000"
                 autoComplete="off"
                 value={settings.password}
                 onChange={(e) => updateSettings({ password: e.target.value })}

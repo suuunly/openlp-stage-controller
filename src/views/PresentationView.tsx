@@ -1,13 +1,11 @@
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { useTapGuard } from '../hooks/useTapGuard';
 import { useSwipe } from '../hooks/useSwipe';
+import { useNavKeys } from '../hooks/useNavKeys';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import styles from './PresentationView.module.css';
-
-const NEXT_KEYS = ['ArrowRight', ' ', 'Enter', 'PageDown'];
-const PREV_KEYS = ['ArrowLeft', 'PageUp'];
 
 /**
  * Presentation view.
@@ -31,19 +29,7 @@ export function PresentationView(): ReactNode {
   const next = useCallback(() => guard('next', goNext), [guard, goNext]);
   const prev = useCallback(() => guard('prev', goPrev), [guard, goPrev]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (NEXT_KEYS.includes(e.key)) {
-        e.preventDefault();
-        next();
-      } else if (PREV_KEYS.includes(e.key)) {
-        e.preventDefault();
-        prev();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev]);
+  useNavKeys(next, prev);
 
   const swipe = useSwipe(next, prev);
 

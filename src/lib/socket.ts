@@ -28,7 +28,7 @@ import type { ConnectionStatus } from './types';
  *   -> 40                                          connect default namespace
  *   <- 40{"sid":…}                                 ready — sid is our client id
  *   -> 42["REMOTE",{id,channel:"PASSWORD"}]        <- {dictionary, password:true}
- *   -> 42["REMOTE",{id,channel:"ACCESS",data:"6897"}]
+ *   -> 42["REMOTE",{id,channel:"ACCESS",data:"<4-digit code>"}]
  *   <- 42["REMOTE",{channel:"ACCESS",data:null}]   authenticated
  *   <- …PROJECTS, SHOWS, SCRIPTURE, CATEGORIES, OUT, OUT_DATA, SHOW…  (pushed)
  *   <- 2  -> 3                                     ping / pong

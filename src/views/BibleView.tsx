@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { useTapGuard } from '../hooks/useTapGuard';
+import { useNavKeys } from '../hooks/useNavKeys';
 import { formatReference, parseReference, wireReference } from '../lib/api';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
@@ -9,9 +10,6 @@ import styles from './BibleView.module.css';
 
 const HISTORY_KEY = 'verse_history';
 const HISTORY_MAX = 5;
-
-const NEXT_KEYS = ['ArrowRight', ' ', 'Enter', 'PageDown'];
-const PREV_KEYS = ['ArrowLeft', 'Backspace', 'PageUp'];
 
 export function loadHistory(): string[] {
   try {
@@ -117,20 +115,7 @@ export function BibleView(): ReactNode {
   const next = useCallback(() => guard('next', verseNext), [guard, verseNext]);
   const prev = useCallback(() => guard('prev', versePrev), [guard, versePrev]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return;
-      if (NEXT_KEYS.includes(e.key)) {
-        e.preventDefault();
-        next();
-      } else if (PREV_KEYS.includes(e.key)) {
-        e.preventDefault();
-        prev();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev]);
+  useNavKeys(next, prev);
 
   function cycleBible() {
     if (bibles.length < 2) return;
@@ -321,7 +306,7 @@ export function BibleView(): ReactNode {
         <div className={styles.reading}>
           <div className={styles.readingHead}>
             <span className={styles.refLabel}>
-              {displayed?.ref ?? reference ?? 'Pick a verse'}
+              {displayed?.ref || reference.trim() || 'Pick a verse'}
             </span>
             {displayed && (
               <span className={onScreen ? styles.onScreen : styles.previewBadge}>
