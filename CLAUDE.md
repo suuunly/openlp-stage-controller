@@ -184,6 +184,7 @@ still stand.
 | TASK-08 — Polish, Error States & UX            | `a1dac5cf-9720-42b0-93b1-3465c1ef2f02` | 4 | 🔲 Todo |
 | TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — hosting must be plain HTTP (§4) |
 | **TASK-10 — Upstream contributions to FreeShow** | `7d28ea57-d588-4f2c-9672-4f59cca8b2a9` | 6 | 🔲 Todo — draft only. **Do not file without Jóhann's review** |
+| **TASK-11 — Visual slide previews & image thumbnails** | `d1cda773-bf98-4951-b07f-ee9ecda66d59` | 4 | 🔲 Todo — slides must be rendered client-side; FreeShow has no slide bitmap and no image downscale |
 
 Order from here: TASK-05 picker → TASK-06 thumbnails → protocol compatibility check
 (§10.7) → TASK-08 → TASK-09 → TASK-10.
