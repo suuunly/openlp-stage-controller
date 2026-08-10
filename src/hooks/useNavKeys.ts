@@ -41,9 +41,16 @@ function isActivatable(target: EventTarget | null): boolean {
   return closestMatch(target, 'button, [role="button"], a[href], summary');
 }
 
-/** Bind next/prev to the keyboard and any HID device pretending to be one. */
-export function useNavKeys(next: () => void, prev: () => void): void {
+/**
+ * Bind next/prev to the keyboard and any HID device pretending to be one.
+ *
+ * `enabled` disarms the pedal along with the on-screen buttons. Disabling the
+ * buttons alone is not enough: the listener is on `window`, so a foot pedal
+ * would keep advancing whatever is live.
+ */
+export function useNavKeys(next: () => void, prev: () => void, enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (isTextEntry(e.target)) return;
       if (ACTIVATION_KEYS.includes(e.key) && isActivatable(e.target)) return;
@@ -57,5 +64,5 @@ export function useNavKeys(next: () => void, prev: () => void): void {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev]);
+  }, [next, prev, enabled]);
 }

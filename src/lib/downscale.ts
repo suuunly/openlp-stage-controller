@@ -1,5 +1,9 @@
 /** Longest edge of the cached preview, in CSS pixels. */
 const MAX_EDGE = 400;
+/** Re-encoded as JPEG: these are photos, and a data URL far smaller than PNG. */
+const FORMAT = 'image/jpeg';
+/** Enough for a 400px card; below ~0.6 artefacts show on flat backgrounds. */
+const QUALITY = 0.7;
 
 /**
  * Shrink a full-size data URL to a small one, and let the original go.
@@ -29,7 +33,7 @@ export async function downscaleDataUrl(
     const ctx = canvas.getContext('2d');
     if (!ctx) return '';
     ctx.drawImage(image, 0, 0, width, height);
-    return canvas.toDataURL('image/jpeg', 0.7);
+    return canvas.toDataURL(FORMAT, QUALITY);
   } catch {
     return '';
   }

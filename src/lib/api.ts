@@ -276,16 +276,23 @@ export function normalizeServiceItem(
   };
 }
 
+/**
+ * A slide's boxes: `items` for a show, `tempItems` for inlined scripture.
+ *
+ * This encodes a protocol fact (CLAUDE.md §8, trap 2), and text extraction and
+ * geometry are read off the same payload — so if the two ever disagreed, the
+ * symptom would be "the text is right but the preview is blank".
+ */
+function slideBoxes(raw: unknown): unknown[] {
+  const slide = asRecord(raw);
+  if (Array.isArray(slide.items)) return slide.items;
+  if (Array.isArray(slide.tempItems)) return slide.tempItems;
+  return [];
+}
+
 /** Pull plain text out of a slide's `items ▸ lines ▸ text ▸ value` nesting. */
 export function extractSlideText(raw: unknown): string {
-  const slide = asRecord(raw);
-  const items = Array.isArray(slide.items)
-    ? slide.items
-    : Array.isArray(slide.tempItems)
-      ? slide.tempItems
-      : [];
-
-  return items
+  return slideBoxes(raw)
     .map((item) => {
       const lines = asRecord(item).lines;
       if (!Array.isArray(lines)) return '';
@@ -372,23 +379,22 @@ function normalizeLine(raw: unknown): SlideLine {
 
 /** Positioned boxes for one slide, safe to render. */
 export function normalizeSlideItems(raw: unknown): SlideItem[] {
-  const slide = asRecord(raw);
-  const items = Array.isArray(slide.items)
-    ? slide.items
-    : Array.isArray(slide.tempItems)
-      ? slide.tempItems
-      : [];
-
-  return items
+  return slideBoxes(raw)
     .map((entry): SlideItem => {
       const item = asRecord(entry);
       const style = parseStyle(item.style);
       const lines = Array.isArray(item.lines) ? item.lines : [];
+      const left = px(style.left);
+      const top = px(style.top);
       return {
-        left: px(style.left),
-        top: px(style.top),
-        width: px(style.width, SLIDE_WIDTH),
-        height: px(style.height, SLIDE_HEIGHT),
+        left,
+        top,
+        // Relative to the offset: an absolute fallback makes an offset box
+        // overflow by exactly its offset, and `.item` centres its text — so a
+        // box at top:900 with no height would render its line off-canvas and
+        // be clipped, with no fallback to text because the item still parses.
+        width: px(style.width, SLIDE_WIDTH - left),
+        height: px(style.height, SLIDE_HEIGHT - top),
         background: safeColor(style['background-color']),
         radius: style['border-radius'] ? px(style['border-radius']) : undefined,
         padding: style.padding ? px(style.padding) : undefined,

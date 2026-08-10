@@ -26,7 +26,6 @@ export function PresentationView(): ReactNode {
   const guard = useTapGuard();
   const next = useCallback(() => guard('next', goNext), [guard, goNext]);
   const prev = useCallback(() => guard('prev', goPrev), [guard, goPrev]);
-  useNavKeys(next, prev);
   const swipe = useSwipe(next, prev);
 
   // A project can list the same show twice; duplicate cards and duplicate React
@@ -50,6 +49,16 @@ export function PresentationView(): ReactNode {
     if (live) setBrowsing(false);
   }, [live]);
   const showGrid = browsing || !live;
+
+  /**
+   * Navigation is disarmed unless one of these decks is live.
+   *
+   * `next_slide` advances whatever the operator has live, not just this view's
+   * content. A speaker opening this before their slot sees a picker; tapping
+   * NEXT there would jump the congregation's song a verse. The pedal is
+   * disarmed with the buttons — the key listener is on `window`.
+   */
+  useNavKeys(next, prev, live);
 
   const counter =
     live && liveItem && liveItem.total > 0
@@ -149,11 +158,21 @@ export function PresentationView(): ReactNode {
       )}
 
       <footer className={styles.nav}>
-        <button type="button" className={styles.navPrev} onClick={prev}>
+        <button
+          type="button"
+          className={styles.navPrev}
+          onClick={prev}
+          disabled={!live}
+        >
           <Icon name="chevron_left" size={28} />
           <span>PREV</span>
         </button>
-        <button type="button" className={styles.navNext} onClick={next}>
+        <button
+          type="button"
+          className={styles.navNext}
+          onClick={next}
+          disabled={!live}
+        >
           <span>NEXT</span>
           <Icon name="chevron_right" size={30} />
         </button>
@@ -161,7 +180,11 @@ export function PresentationView(): ReactNode {
 
       <div className={styles.hint}>
         <Icon name="keyboard" size={16} />
-        <span>Arrow keys, space or a clicker also advance slides</span>
+        <span>
+          {live
+            ? 'Arrow keys, space or a clicker also advance slides'
+            : 'Pick a presentation first — nav stays off so it can’t move someone else’s song'}
+        </span>
       </div>
     </section>
   );

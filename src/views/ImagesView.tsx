@@ -115,7 +115,14 @@ function useThumbnails(
 ): Record<string, string> {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const asked = useRef(new Set<string>());
-  const running = useRef(false);
+  /**
+   * A token, not a boolean: cleanup used to clear a flag it might not own,
+   * while the loop was still parked on an `await`. A dependency change then
+   * started a second loop, and two in-flight `get_thumbnail` requests race —
+   * replies correlate FIFO per channel with no request id, so one image's
+   * base64 lands on another's waiter.
+   */
+  const running = useRef<object | null>(null);
 
   useEffect(() => {
     if (!enabled || connection !== 'connected' || running.current) return;
@@ -123,26 +130,30 @@ function useThumbnails(
     if (queue.length === 0) return;
 
     let alive = true;
-    running.current = true;
+    const token = {};
+    running.current = token;
     void (async () => {
-      for (const image of queue) {
-        if (!alive) break;
-        asked.current.add(image.id);
-        const path = image.path ?? image.id;
-        if (!path) continue;
-        const full = await fetchThumbnail(path);
-        if (!alive) break;
-        // Shrink before storing; the full-size string is not kept.
-        const small = await downscaleDataUrl(full);
-        if (!alive) break;
-        if (small) setThumbs((prev) => ({ ...prev, [image.id]: small }));
+      try {
+        for (const image of queue) {
+          if (!alive) break;
+          asked.current.add(image.id);
+          const path = image.path ?? image.id;
+          if (!path) continue;
+          const full = await fetchThumbnail(path);
+          if (!alive) break;
+          // Shrink before storing; the full-size string is not kept.
+          const small = await downscaleDataUrl(full);
+          if (!alive) break;
+          if (small) setThumbs((prev) => ({ ...prev, [image.id]: small }));
+        }
+      } finally {
+        if (running.current === token) running.current = null;
       }
-      running.current = false;
     })();
 
+    // Don't release a slot this effect may no longer own.
     return () => {
       alive = false;
-      running.current = false;
     };
   }, [images, connection, enabled]);
 

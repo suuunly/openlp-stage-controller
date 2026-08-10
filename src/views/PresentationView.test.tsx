@@ -104,6 +104,10 @@ describe('keyboard navigation', () => {
     screen.getByRole('button', { name: /Change/ }).focus();
     await user.keyboard('{Enter}');
 
+    // The click landed — the picker is open, so Change is gone. Without this
+    // the test would still pass if the button did nothing at all, and the
+    // premise ("Enter activates a focused button") would go unobserved.
+    expect(screen.queryByRole('button', { name: /Change/ })).not.toBeInTheDocument();
     expect(MockWebSocket.last().outbound().map((m) => m.channel)).not.toContain(
       'API:next_slide',
     );
@@ -111,13 +115,34 @@ describe('keyboard navigation', () => {
 
   it('still advances from a focused control on the pedal keys', async () => {
     const user = userEvent.setup();
-    renderPresentation();
+    const socket = renderPresentation();
+    act(() => {
+      socket.channel('OUT_DATA', { slide: { id: 'deck1', layout: 'l1', index: 0 } });
+      socket.channel('SHOW', showPayload('Sermon', 'Rooted and Built Up'));
+    });
 
     // Arrow keys don't activate a button, so the pedal must keep working.
-    screen.getByRole('button', { name: /Sermon/ }).focus();
+    screen.getByRole('button', { name: /Change/ }).focus();
     await user.keyboard('{ArrowRight}');
 
     expect(MockWebSocket.last().outbound().map((m) => m.channel)).toContain(
+      'API:next_slide',
+    );
+  });
+
+  it('disarms navigation while the picker is up, buttons and pedal alike', async () => {
+    const user = userEvent.setup();
+    const socket = renderPresentation();
+
+    // A song is live and no deck of ours is — tapping NEXT here would jump the
+    // congregation's song a verse.
+    act(() =>
+      socket.channel('OUT_DATA', { slide: { id: 'song1', layout: 'l1', index: 0 } }),
+    );
+
+    expect(screen.getByRole('button', { name: /NEXT/ })).toBeDisabled();
+    await user.keyboard('{ArrowRight}');
+    expect(MockWebSocket.last().outbound().map((m) => m.channel)).not.toContain(
       'API:next_slide',
     );
   });

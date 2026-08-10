@@ -265,6 +265,17 @@
   transform: scale(0.98);
 }
 
+/* Disarmed while the picker is up: nothing of ours is live to advance. */
+.navPrev:disabled,
+.navNext:disabled {
+  background: var(--c-surface-inset);
+  box-shadow: none;
+  color: var(--c-text-fainter);
+  cursor: default;
+  transform: none;
+  filter: none;
+}
+
 .hint {
   flex: none;
   display: flex;
