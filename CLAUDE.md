@@ -185,9 +185,12 @@ still stand.
 | TASK-09 — Distribution & Setup Guide           | `81eb34f2-2b2e-49b1-874a-5224db35364a` | 5 | 🔲 Todo — hosting must be plain HTTP (§4) |
 | **TASK-10 — Upstream contributions to FreeShow** | `7d28ea57-d588-4f2c-9672-4f59cca8b2a9` | 6 | 🔲 Todo — draft only. **Do not file without Jóhann's review** |
 | **TASK-11 — Visual slide previews & image thumbnails** | `d1cda773-bf98-4951-b07f-ee9ecda66d59` | 4 | 🔲 Todo — slides must be rendered client-side; FreeShow has no slide bitmap and no image downscale |
+| **TASK-12 — Protocol compatibility check** | `cf69d076-dad1-40e7-9a88-d52e5a2019d6` | 4 | 🔲 Todo — makes a FreeShow update a deliberate check, not a Sunday surprise |
+| **TASK-13 — On-device field test** | `791616de-cb33-4e0e-b3bd-59354e828ddc` | 4 | 🔲 Todo — **iPad, WiFi, foot pedal, real content. Everything so far is desktop-on-localhost** |
 
-Order from here: TASK-05 picker → TASK-06 thumbnails → protocol compatibility check
-(§10.7) → TASK-08 → TASK-09 → TASK-10.
+✅ TASK-05's picker and preview are built. Order from here: **TASK-13 field test** (it can
+invalidate anything below) → TASK-12 compatibility check → TASK-08 → TASK-09 → TASK-10
+upstream → TASK-11 previews.
 
 ### ⚠️ Phase 1's "verified live" status is unproven
 
