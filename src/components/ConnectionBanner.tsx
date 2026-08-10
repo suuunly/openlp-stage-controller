@@ -5,9 +5,11 @@ import { Icon } from './Icon';
 import styles from './ConnectionBanner.module.css';
 
 /**
- * Global "can't reach OpenLP" banner (TASK-03). Shown whenever the app is
- * configured but the WebSocket is not connected — except on the Settings
- * view, where the user is actively fixing the connection.
+ * Global connection banner. Shown whenever the app is configured but not fully
+ * connected — except on Settings, where the user is already fixing it.
+ *
+ * `unauthorized` is called out separately: FreeShow answered and rejected the
+ * code, which needs a different fix from "can't reach it".
  */
 export function ConnectionBanner(): ReactNode {
   const { connection, settings, view } = useApp();
@@ -16,15 +18,21 @@ export function ConnectionBanner(): ReactNode {
 
   if (!show) return null;
 
-  const reconnecting = connection === 'connecting';
+  const rejected = connection === 'unauthorized';
 
   return (
-    <div className={styles.banner} role="status" aria-live="polite">
-      <Icon name="wifi_off" size={18} />
+    <div
+      className={`${styles.banner} ${rejected ? '' : styles.bannerWarn}`}
+      role="status"
+      aria-live="polite"
+    >
+      <Icon name={connection === 'connecting' ? 'cast_connected' : 'wifi_off'} size={18} />
       <span>
-        {reconnecting
-          ? 'Reconnecting to OpenLP…'
-          : '⚠️ Cannot reach OpenLP — check WiFi'}
+        {rejected
+          ? '⚠️ FreeShow rejected the code — check it in Settings'
+          : connection === 'connecting'
+            ? 'Connecting to FreeShow…'
+            : '⚠️ Cannot reach FreeShow — check WiFi, or that RemoteShow is on'}
       </span>
     </div>
   );

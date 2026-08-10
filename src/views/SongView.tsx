@@ -1,18 +1,18 @@
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { useTapGuard } from '../hooks/useTapGuard';
 import { useSwipe } from '../hooks/useSwipe';
+import { useNavKeys } from '../hooks/useNavKeys';
 import { Icon } from '../components/Icon';
 import styles from './SongView.module.css';
-
-const NEXT_KEYS = ['ArrowRight', ' ', 'Enter', 'PageDown'];
-const PREV_KEYS = ['ArrowLeft', 'Backspace', 'PageUp'];
 
 export function SongView(): ReactNode {
   const {
     navigate,
     serviceItems,
+    shows,
     liveItem,
+    outputText,
     settings,
     goNext,
     goPrev,
@@ -24,28 +24,21 @@ export function SongView(): ReactNode {
   const next = useCallback(() => guard('next', goNext), [guard, goNext]);
   const prev = useCallback(() => guard('prev', goPrev), [guard, goPrev]);
 
-  // Keyboard / foot-pedal support (scoped: this view only mounts when active).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (NEXT_KEYS.includes(e.key)) {
-        e.preventDefault();
-        next();
-      } else if (PREV_KEYS.includes(e.key)) {
-        e.preventDefault();
-        prev();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev]);
+  useNavKeys(next, prev);
 
   const swipe = useSwipe(next, prev);
 
-  const songs = serviceItems.filter((it) => it.plugin === 'songs');
+  const songs = serviceItems.filter((it) => it.kind === 'song');
+  // A song tagged "Presentations" in FreeShow lands in the other view. Saying
+  // so beats an empty screen that looks like a broken connection.
+  const misfiled = serviceItems.filter((it) => it.kind === 'presentation').length;
   const liveId = liveItem?.id ?? null;
   const isLive = (id: string) => liveId !== null && id === liveId;
 
-  const currentLine = liveItem ? liveItem.text.replace(/\s*\n+\s*/g, ' ').trim() : '';
+  // `get_output_slide_text` is purpose-built for the read-along; fall back to
+  // the live slide's own text when the screens are blank or it's unreadable.
+  const readAlong = outputText || liveItem?.text || '';
+  const currentLine = readAlong.replace(/\s*\n+\s*/g, ' ').trim();
 
   return (
     <section className={styles.view}>
@@ -72,13 +65,19 @@ export function SongView(): ReactNode {
           <div className={styles.empty}>
             <Icon name="queue_music" size={40} />
             <p className={styles.emptyTitle}>No songs in this service</p>
-            <p className={styles.emptyDesc}>Ask the tech team to add songs to the service.</p>
+            <p className={styles.emptyDesc}>
+              {misfiled > 0
+                ? `${misfiled} item${misfiled === 1 ? ' is' : 's are'} tagged “Presentations” in FreeShow — set their category to Songs to see them here.`
+                : 'Ask the tech team to add songs to the service.'}
+            </p>
           </div>
         )}
 
         {songs.map((song, i) => {
           const live = isLive(song.id);
-          const total = live && liveItem ? liveItem.total : song.slides ?? 0;
+          // Slide counts come from the show definition, so they are known for
+          // songs that aren't live yet — the pills work before you tap.
+          const total = shows.get(song.id)?.slides.length ?? (live ? liveItem?.total ?? 0 : 0);
           const slide = live && liveItem ? liveItem.slide : 0;
           return (
             <div
@@ -101,9 +100,11 @@ export function SongView(): ReactNode {
                   <div className={styles.songTitle}>{song.title}</div>
                   {song.notes && <div className={styles.songAuthor}>{song.notes}</div>}
                 </div>
-                <div className={`${styles.count} ${live ? styles.countLive : ''}`}>
-                  {live && total ? `Slide ${slide + 1} / ${total}` : total ? `${total} slides` : ''}
-                </div>
+                {total > 0 && (
+                  <div className={`${styles.count} ${live ? styles.countLive : ''}`}>
+                    {live ? `Slide ${slide + 1} / ${total}` : `${total} slides`}
+                  </div>
+                )}
               </div>
 
               {live && total > 0 && (

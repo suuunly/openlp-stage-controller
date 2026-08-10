@@ -1,0 +1,376 @@
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-bg);
+}
+
+/* 30 / 70 split — the reading pane is the point of this view (design spec). */
+.split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.pane {
+  flex: 0 0 32%;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  padding: var(--s-6) var(--s-6) var(--s-6) var(--s-7);
+  overflow-y: auto;
+  border-right: 1px solid var(--c-line);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.fieldLabel {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+.input {
+  height: var(--tap-primary);
+  padding: 0 18px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--c-line-strong);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  font-family: var(--font-serif);
+  font-size: 24px;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--c-accent-border);
+}
+.input::placeholder {
+  color: var(--c-text-fainter);
+}
+
+.showBtn {
+  width: 100%;
+  height: var(--tap-nav);
+  border-radius: var(--r-md);
+  background: var(--grad-accent);
+  box-shadow: var(--glow-accent);
+  color: var(--c-on-accent);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  transition: filter 0.15s;
+}
+.showBtn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.showBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.showBtn:disabled {
+  background: var(--c-surface-2);
+  box-shadow: none;
+  color: var(--c-text-fainter);
+  cursor: default;
+}
+
+.actions {
+  flex: none;
+  padding: 0 var(--s-7) var(--s-3);
+}
+
+.historyWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.historyLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.chip {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--c-line-3);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.12s;
+}
+.chip:active {
+  transform: scale(0.96);
+}
+.chipOn {
+  border-color: var(--c-accent-border);
+  background: var(--c-accent-tint);
+  color: var(--c-accent-bright);
+}
+
+/* ---- reading pane ---- */
+.reading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--grad-verse);
+}
+
+.readingHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-5) var(--s-7) 0;
+}
+.refLabel {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--c-accent-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.onScreen {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: var(--r-chip);
+  background: var(--c-accent-badge);
+  color: var(--c-on-accent);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.verseWrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-5) var(--s-7);
+  display: flex;
+}
+.verse {
+  margin: auto 0;
+  font-family: var(--font-serif);
+  line-height: 1.45;
+  color: var(--c-text-reading);
+  white-space: pre-wrap;
+}
+.empty,
+.error {
+  margin: auto;
+  max-width: 22em;
+  text-align: center;
+  font-size: 17px;
+  line-height: 1.5;
+}
+.empty {
+  color: var(--c-text-fainter);
+}
+.error {
+  color: var(--c-warn-text);
+  font-weight: 600;
+}
+
+.nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-7) 22px;
+  border-top: 1px solid var(--c-line);
+}
+.navPrev,
+.navNext {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--tap-nav);
+  border-radius: var(--r-md);
+  user-select: none;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.navPrev {
+  flex: 1;
+  gap: 10px;
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-size: 22px;
+  transition: background 0.15s;
+}
+.navPrev:hover {
+  background: var(--c-surface-hover);
+}
+.navPrev:active {
+  transform: scale(0.98);
+}
+.navNext {
+  flex: 1.5;
+  gap: 14px;
+  background: var(--grad-accent);
+  box-shadow: var(--glow-accent);
+  color: var(--c-on-accent);
+  font-weight: 800;
+  font-size: 24px;
+  transition: filter 0.15s;
+}
+.navNext:hover {
+  filter: brightness(1.05);
+}
+.navNext:active {
+  transform: scale(0.98);
+}
+
+/* Portrait / narrow: stack the panes rather than squeezing the reading pane. */
+@media (max-aspect-ratio: 1/1) {
+  .split {
+    flex-direction: column;
+  }
+  .pane {
+    flex: none;
+    border-right: none;
+    border-bottom: 1px solid var(--c-line);
+  }
+}
+
+
+/* ---- bible switcher in the header ---- */
+.bibleCycle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 260px;
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--c-line-3);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 600;
+  font-size: 15px;
+}
+.bibleCycle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bibleCycle:hover {
+  background: var(--c-surface-hover);
+}
+
+/* ---- Book ▸ Chapter ▸ Verse picker ---- */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.crumb {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-xs);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 600;
+  font-size: 14px;
+}
+.crumb:not(:last-child)::after {
+  content: '›';
+  margin-left: 10px;
+  color: var(--c-text-fainter);
+}
+
+.picker {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.pickerEmpty {
+  margin: var(--s-5) 0;
+  color: var(--c-text-fainter);
+  font-size: 15px;
+}
+
+.bookList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bookBtn {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 12px 16px;
+  text-align: left;
+  border-radius: var(--r-xs);
+  background: var(--c-surface-2);
+  color: var(--c-text-2);
+  font-weight: 600;
+  font-size: 17px;
+  transition: background 0.12s;
+}
+.bookBtn:hover {
+  background: var(--c-surface-hover);
+}
+.bookBtn:active {
+  transform: scale(0.99);
+}
+
+.numGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 8px;
+}
+.numBtn {
+  height: 52px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--c-line-3);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 700;
+  font-size: 16px;
+  transition: all 0.12s;
+}
+.numBtn:active {
+  transform: scale(0.94);
+}
+.numBtnOn {
+  border-color: var(--c-accent-border);
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+
+/* Amber = not on screen yet, matching the design's "pending" language. */
+.previewBadge {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--c-warn-border);
+  background: var(--c-warn-tint);
+  color: var(--c-warn-text);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}

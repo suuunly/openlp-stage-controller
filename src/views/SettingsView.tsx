@@ -1,12 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
-import { fetchState } from '../lib/api';
 import { isConfigured } from '../lib/storage';
 import { Icon } from '../components/Icon';
-import type { FontSize, ViewId } from '../lib/types';
+import type { ConnectionStatus, FontSize, ViewId } from '../lib/types';
 import styles from './SettingsView.module.css';
-
-type TestState = 'idle' | 'testing' | 'ok' | 'fail';
 
 const FONT_OPTIONS: { value: FontSize; label: string }[] = [
   { value: 'small', label: 'Small' },
@@ -23,29 +20,31 @@ const ROLE_CYCLE: { value: ViewId; label: string }[] = [
 ];
 
 export function SettingsView(): ReactNode {
-  const { settings, updateSettings, commitSettings, navigate } = useApp();
-  const [test, setTest] = useState<TestState>('idle');
+  const {
+    settings,
+    updateSettings,
+    commitSettings,
+    navigate,
+    connection,
+    projects,
+    bibles,
+  } = useApp();
 
   const configured = isConfigured(settings);
-
-  async function testConnection() {
-    setTest('testing');
-    try {
-      await fetchState({
-        host: settings.host,
-        port: settings.port,
-        username: settings.username,
-        password: settings.password,
-      });
-      setTest('ok');
-    } catch {
-      setTest('fail');
-    }
-  }
 
   function goToStage() {
     commitSettings();
     navigate(settings.defaultRole === 'settings' ? 'home' : settings.defaultRole);
+  }
+
+  /**
+   * Leaving Settings saves too. There is no "cancel" here — every field is a
+   * device preference — and silently discarding a code someone just typed
+   * looks exactly like the code being wrong.
+   */
+  function leave() {
+    commitSettings();
+    navigate('home');
   }
 
   function cycleRole() {
@@ -64,7 +63,7 @@ export function SettingsView(): ReactNode {
           <button
             type="button"
             className={styles.back}
-            onClick={() => navigate('home')}
+            onClick={leave}
             aria-label="Back to home"
           >
             <Icon name="arrow_back" size={26} />
@@ -77,13 +76,12 @@ export function SettingsView(): ReactNode {
       </header>
 
       <div className={styles.body}>
-        {/* ---- Connection ---- */}
         <section>
-          <h2 className={styles.sectionLabel}>OpenLP Connection</h2>
+          <h2 className={styles.sectionLabel}>FreeShow Connection</h2>
 
           <div className={styles.row}>
             <label className={styles.fieldWide}>
-              <span className={styles.fieldLabel}>Server IP</span>
+              <span className={styles.fieldLabel}>FreeShow computer IP</span>
               <input
                 className={`${styles.input} ${styles.mono}`}
                 type="text"
@@ -91,10 +89,7 @@ export function SettingsView(): ReactNode {
                 placeholder="192.168.1.50"
                 autoComplete="off"
                 value={settings.host}
-                onChange={(e) => {
-                  updateSettings({ host: e.target.value });
-                  setTest('idle');
-                }}
+                onChange={(e) => updateSettings({ host: e.target.value })}
               />
             </label>
             <label className={styles.fieldNarrow}>
@@ -103,62 +98,44 @@ export function SettingsView(): ReactNode {
                 className={`${styles.input} ${styles.mono}`}
                 type="text"
                 inputMode="numeric"
-                placeholder="4316"
+                placeholder="5510"
                 value={settings.port}
-                onChange={(e) => {
-                  updateSettings({ port: e.target.value });
-                  setTest('idle');
-                }}
+                onChange={(e) => updateSettings({ port: e.target.value })}
               />
             </label>
-          </div>
-
-          <div className={styles.row}>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>
-                Username <span className={styles.muted}>(optional)</span>
-              </span>
+            <label className={styles.fieldNarrow}>
+              <span className={styles.fieldLabel}>Code</span>
               <input
-                className={styles.input}
+                className={`${styles.input} ${styles.mono}`}
                 type="text"
-                placeholder="—"
-                autoComplete="username"
-                value={settings.username}
-                onChange={(e) => updateSettings({ username: e.target.value })}
-              />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>
-                Password <span className={styles.muted}>(optional)</span>
-              </span>
-              <input
-                className={styles.input}
-                type="password"
-                placeholder="—"
-                autoComplete="current-password"
+                inputMode="numeric"
+                placeholder="0000"
+                autoComplete="off"
                 value={settings.password}
                 onChange={(e) => updateSettings({ password: e.target.value })}
               />
             </label>
           </div>
 
+          <p className={styles.hint}>
+            In FreeShow, open <em>Settings → Connection</em> and switch{' '}
+            <strong>RemoteShow</strong> on. Click its row for the address and the{' '}
+            <strong>4-digit code</strong> — the same ones the built-in remote uses.
+          </p>
+
           <div className={styles.testRow}>
-            <button
-              type="button"
-              className={styles.testBtn}
-              onClick={testConnection}
-              disabled={test === 'testing'}
-            >
-              <Icon name="cable" size={22} />
-              <span>Test Connection</span>
-            </button>
-            <TestResult state={test} />
+            <StatusLine
+              connection={connection}
+              projects={projects.length}
+              bibles={bibles.length}
+              configured={configured}
+              hasCode={settings.password.trim().length > 0}
+            />
           </div>
         </section>
 
         <div className={styles.divider} />
 
-        {/* ---- Display ---- */}
         <section>
           <h2 className={styles.sectionLabel}>Display</h2>
 
@@ -195,14 +172,14 @@ export function SettingsView(): ReactNode {
 
           <div className={styles.settingRow}>
             <div>
-              <div className={styles.settingTitle}>Next-slide preview</div>
-              <div className={styles.settingDesc}>Show the current line under the live song</div>
+              <div className={styles.settingTitle}>On-screen text preview</div>
+              <div className={styles.settingDesc}>Show what’s on the screens under the live song</div>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={settings.nextPreview}
-              aria-label="Next-slide preview"
+              aria-label="On-screen text preview"
               className={`${styles.toggle} ${settings.nextPreview ? styles.toggleOn : ''}`}
               onClick={() => updateSettings({ nextPreview: !settings.nextPreview })}
             >
@@ -214,35 +191,75 @@ export function SettingsView(): ReactNode {
 
       <footer className={styles.footer}>
         <button type="button" className={styles.primary} onClick={goToStage}>
-          Go to Stage <Icon name="arrow_forward" size={22} />
+          {configured ? 'Go to Stage' : 'Connect'} <Icon name="arrow_forward" size={22} />
         </button>
       </footer>
     </section>
   );
 }
 
-function TestResult({ state }: { state: TestState }): ReactNode {
-  if (state === 'idle') return null;
-  if (state === 'testing') {
+/**
+ * Live connection state. There is no "test" button any more — the socket is
+ * either up or it isn't, and it says so continuously.
+ */
+function StatusLine({
+  connection,
+  projects,
+  bibles,
+  configured,
+  hasCode,
+}: {
+  connection: ConnectionStatus;
+  projects: number;
+  bibles: number;
+  configured: boolean;
+  hasCode: boolean;
+}): ReactNode {
+  if (!configured) {
     return (
       <div className={`${styles.testResult} ${styles.testTesting}`}>
-        <Icon name="progress_activity" size={20} spin />
-        <span>Testing…</span>
+        <Icon name="cable" size={20} />
+        <span>Enter the address and code, then tap Connect</span>
       </div>
     );
   }
-  if (state === 'ok') {
+  if (connection === 'connected') {
     return (
       <div className={`${styles.testResult} ${styles.testOk}`}>
         <Icon name="check_circle" size={20} />
-        <span>Connected</span>
+        <span>
+          Connected — {projects} project{projects === 1 ? '' : 's'}, {bibles} bible
+          {bibles === 1 ? '' : 's'}
+        </span>
+      </div>
+    );
+  }
+  if (connection === 'unauthorized') {
+    // An empty box is a different problem from a wrong code, and saying
+    // "FreeShow rejected it" when nothing was sent just sends people hunting.
+    return (
+      <div className={`${styles.testResult} ${styles.testFail}`}>
+        <Icon name="wifi_off" size={20} />
+        <span>
+          {hasCode
+            ? 'FreeShow rejected the code — check it in Settings → Connection'
+            : 'Enter the 4-digit code — FreeShow shows it beside RemoteShow’s QR'}
+        </span>
+      </div>
+    );
+  }
+  if (connection === 'connecting') {
+    return (
+      <div className={`${styles.testResult} ${styles.testTesting}`}>
+        <Icon name="progress_activity" size={20} spin />
+        <span>Connecting…</span>
       </div>
     );
   }
   return (
     <div className={`${styles.testResult} ${styles.testFail}`}>
       <Icon name="wifi_off" size={20} />
-      <span>Cannot reach OpenLP — check IP &amp; port</span>
+      <span>No answer — check the IP, and that RemoteShow is switched on</span>
     </div>
   );
 }

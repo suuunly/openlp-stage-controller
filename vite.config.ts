@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// base: './' → relative asset URLs so the built app drops straight into
-// OpenLP's  DataFolder/stages/elim-remote/  and is reachable at
-// http://<openlp-ip>:4316/stage/elim-remote/  with no path config.
+// base: './' → relative asset URLs, so the built app runs from any directory
+// on any static host without path config. FreeShow has no equivalent of
+// OpenLP's drop-in stage folder, so the bundle is served either from a small
+// static server on the FreeShow PC or straight off disk — see CLAUDE.md §4.
 export default defineConfig({
   base: './',
   plugins: [react()],

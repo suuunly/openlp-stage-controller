@@ -1,111 +1,143 @@
-import { loadSettings } from './storage';
-import type { LiveItem, ServiceItem } from './types';
+import { FreeShowSocket, socketUrl } from './socket';
+import type {
+  Bible,
+  BibleBook,
+  BibleChapter,
+  BibleInfo,
+  BibleVerse,
+  ConnectionStatus,
+  ItemKind,
+  LiveItem,
+  Project,
+  ServiceItem,
+  ShowDetail,
+  Slide,
+} from './types';
 
-/** Connection details for building API/WS URLs. */
+/**
+ * The one place the app talks to FreeShow (hard rule, CLAUDE.md §9).
+ *
+ * Owns a single RemoteShow socket. Views never touch this directly — they read
+ * from `AppContext`, which owns the connection lifecycle.
+ */
+
 export interface ConnInfo {
   host: string;
   port: string;
-  username?: string;
-  password?: string;
+  password: string;
 }
 
-function connFromStorage(): ConnInfo {
-  const s = loadSettings();
-  return {
-    host: s.host,
-    port: s.port,
-    username: s.username,
-    password: s.password,
-  };
+export const HOST_PLACEHOLDER = '192.168.1.50';
+export const DEFAULT_PORT = '5510';
+
+let socket: FreeShowSocket | null = null;
+
+export interface ConnectCallbacks {
+  onStatus: (status: ConnectionStatus) => void;
+  onMessage: (channel: string, data: unknown) => void;
 }
 
-export function apiUrl(path: string, conn: ConnInfo = connFromStorage()): string {
-  const host = conn.host || '192.168.1.50';
-  const port = conn.port || '4316';
-  return `http://${host}:${port}${path}`;
+export function connect(conn: ConnInfo, cb: ConnectCallbacks): void {
+  disconnect();
+  socket = new FreeShowSocket(
+    socketUrl(conn.host || HOST_PLACEHOLDER, conn.port || DEFAULT_PORT),
+    conn.password,
+    cb,
+  );
+  socket.start();
 }
 
-export function wsUrl(conn: ConnInfo = connFromStorage()): string {
-  const host = conn.host || '192.168.1.50';
-  const port = conn.port || '4316';
-  return `ws://${host}:${port}/ws`;
+export function disconnect(): void {
+  socket?.stop();
+  socket = null;
 }
 
-function authHeader(conn: ConnInfo): Record<string, string> {
-  if (conn.username && conn.password) {
-    return { Authorization: 'Basic ' + btoa(`${conn.username}:${conn.password}`) };
+export function isConnected(): boolean {
+  return socket?.isReady ?? false;
+}
+
+/* ---------------------------------------------------------------- *
+ * Commands
+ * ---------------------------------------------------------------- */
+
+function fire(fn: (s: FreeShowSocket) => void): void {
+  if (!socket?.isReady) return;
+  try {
+    fn(socket);
+  } catch {
+    /* the socket dropped between the check and the send */
   }
-  return {};
 }
+
+export const nextSlide = (): void => fire((s) => s.api('next_slide'));
+export const previousSlide = (): void => fire((s) => s.api('previous_slide'));
+
+export const selectSlide = (showId: string, index: number): void =>
+  fire((s) => s.api('index_select_slide', { showId, index }));
 
 /**
- * Shared API helper — every network call goes through here.
- * Reads the connection from localStorage unless an explicit `conn` is given
- * (Settings' "Test Connection" passes the in-progress, unsaved form values).
+ * Put a different show on screen.
+ *
+ * `index_select_slide` alone does nothing for a show FreeShow doesn't already
+ * have open — the `SHOW` message is what opens it. This two-step is the whole
+ * reason the app uses RemoteShow's protocol rather than the public API.
  */
-export async function apiFetch<T = unknown>(
-  path: string,
-  options: RequestInit = {},
-  conn: ConnInfo = connFromStorage(),
-): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...authHeader(conn),
-    ...(options.headers as Record<string, string> | undefined),
-  };
-  const res = await fetch(apiUrl(path, conn), { ...options, headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  // Some endpoints return empty bodies (204 / POST acks).
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
-
-const post = (path: string, body?: unknown) =>
-  apiFetch(path, {
-    method: 'POST',
-    body: body === undefined ? undefined : JSON.stringify(body),
+export const selectShow = (showId: string, index = 0): void =>
+  fire((s) => {
+    s.send('SHOW', showId);
+    s.api('index_select_slide', { showId, index });
   });
 
-/* ---------------------------------------------------------------- *
- * Typed actions (thin wrappers over the OpenLP v2 REST API)
- * ---------------------------------------------------------------- */
+export const clearOutput = (): void => fire((s) => s.api('clear_all'));
+export const clearSlide = (): void => fire((s) => s.api('clear_slide'));
 
-/** Connectivity probe used by Settings → Test Connection. */
-export function fetchState(conn?: ConnInfo): Promise<unknown> {
-  return apiFetch('/api/v2/core/state', {}, conn ?? connFromStorage());
-}
+export const startScripture = (reference: string, id?: string): void =>
+  fire((s) => s.api('start_scripture', id ? { reference, id } : { reference }));
 
-export async function fetchServiceItems(): Promise<ServiceItem[]> {
-  const raw = await apiFetch<unknown>('/api/v2/service/items');
-  const arr = unwrap(raw);
-  if (!Array.isArray(arr)) return [];
-  return arr.map(normalizeServiceItem);
-}
+export const scriptureNext = (): void => fire((s) => s.api('scripture_next'));
+export const scripturePrevious = (): void =>
+  fire((s) => s.api('scripture_previous'));
 
-export async function fetchLiveItem(): Promise<LiveItem | null> {
-  const raw = await apiFetch<unknown>('/api/v2/controller/live-item');
-  return normalizeLiveItem(raw);
-}
+/** Ask for a show's full definition; the reply arrives on the `SHOW` channel. */
+export const requestShow = (showId: string): void =>
+  fire((s) => s.send('SHOW', showId));
 
-export const nextItem = () => post('/api/v2/controller/next-item');
-export const previousItem = () => post('/api/v2/controller/previous-item');
-export const showItem = (id: string) => post('/api/v2/service/show', { id });
-export const showSlide = (id: string, slide: number) =>
-  post('/api/v2/controller/show', { id, slide });
-export const setBlank = (display: 'blank' | 'theme' | 'desktop' | 'show') =>
-  post('/api/v2/controller/blank', { display });
+/** Ask for a bible, or a narrower slice of one. */
+export const requestScripture = (
+  id: string,
+  book?: { key: string; index: number },
+  chapter?: { key: string; index: number },
+): void =>
+  fire((s) =>
+    s.send('GET_SCRIPTURE', {
+      id,
+      ...(book ? { bookKey: book.key, bookIndex: book.index } : {}),
+      ...(chapter ? { chapterKey: chapter.key, chapterIndex: chapter.index } : {}),
+    }),
+  );
 
-/* ---------------------------------------------------------------- *
- * Normalisation — OpenLP's shapes vary by version; be defensive.
- * ---------------------------------------------------------------- */
-
-/** Unwrap the common `{ results: ... }` envelope. */
-function unwrap(raw: unknown): unknown {
-  if (raw && typeof raw === 'object' && 'results' in raw) {
-    return (raw as { results: unknown }).results;
+/** Media thumbnail as a data URL, or '' when FreeShow has none. */
+export async function fetchThumbnail(path: string): Promise<string> {
+  if (!socket?.isReady || !path) return '';
+  try {
+    const res = await socket.requestApi<{ thumbnail?: unknown }>(
+      'get_thumbnail',
+      { path },
+      4000,
+    );
+    return str(asRecord(res).thumbnail);
+  } catch {
+    return '';
   }
-  return raw;
 }
+
+/* ---------------------------------------------------------------- *
+ * Normalisation
+ *
+ * Shapes verified live on 2026-08-10 — see the Usable fragment *FreeShow
+ * RemoteShow protocol (port 5510) — VERIFIED LIVE*. Still defensive: this is a
+ * private protocol and may drift between FreeShow releases.
+ * ---------------------------------------------------------------- */
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
@@ -120,74 +152,371 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeServiceItem(raw: unknown, i: number): ServiceItem {
-  const r = asRecord(raw);
+/** Strip a directory path and file extension off a filename-ish title. */
+export function cleanTitle(raw: string): string {
+  const base = raw.split(/[\\/]/).pop() ?? raw;
+  return base.replace(/\.[a-z0-9]{2,5}$/i, '') || raw;
+}
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|heic|avif)$/i;
+const VIDEO_EXT = /\.(mp4|mov|mkv|webm|avi|m4v)$/i;
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|flac)$/i;
+const PRESO_EXT = /\.(pptx?|odp|pdf|key)$/i;
+
+/** Metadata from the `SHOWS` channel: `{ name, category }` per show id. */
+export type ShowIndex = Map<string, { name: string; category: string | null }>;
+
+/**
+ * Classify a project item. FreeShow's own `category` is authoritative where it
+ * exists — that is what the Songs/Presentations tabs use — then the item type,
+ * then the filename.
+ *
+ * An uncategorised show falls back to `song`: a service is mostly songs, and a
+ * show that appears in no view at all is worse than one in the wrong view.
+ */
+export function classifyItem(
+  item: Record<string, unknown>,
+  show?: { category: string | null },
+): ItemKind {
+  const type = str(item.type).toLowerCase();
+  if (type === 'section') return 'section';
+  if (type === 'image') return 'image';
+  if (type === 'video' || type === 'player') return 'video';
+  if (type === 'audio') return 'audio';
+  if (type === 'pdf' || type === 'ppt' || type === 'powerpoint') {
+    return 'presentation';
+  }
+
+  const category = (show?.category ?? '').toLowerCase();
+  if (category.includes('song')) return 'song';
+  if (category.includes('present') || category.includes('slide')) {
+    return 'presentation';
+  }
+
+  const name = str(item.name ?? item.path ?? item.id);
+  if (IMAGE_EXT.test(name)) return 'image';
+  if (VIDEO_EXT.test(name)) return 'video';
+  if (AUDIO_EXT.test(name)) return 'audio';
+  if (PRESO_EXT.test(name)) return 'presentation';
+
+  return 'song';
+}
+
+/** `SHOWS` → an id-keyed index of names and categories. */
+export function normalizeShowIndex(raw: unknown): ShowIndex {
+  const index: ShowIndex = new Map();
+  for (const [id, value] of Object.entries(asRecord(raw))) {
+    const show = asRecord(value);
+    index.set(id, {
+      name: str(show.name, id),
+      category: show.category == null ? null : str(show.category),
+    });
+  }
+  return index;
+}
+
+/**
+ * `PROJECTS` → domain projects. Project entries are bare `{id, index}`, so
+ * names and categories have to come from the `SHOWS` index.
+ */
+export function normalizeProjects(raw: unknown, shows: ShowIndex): Project[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : Object.entries(asRecord(raw)).map(([id, v]) => ({ id, ...asRecord(v) }));
+
+  return list.map((value, i) => {
+    const project = asRecord(value);
+    const entries = Array.isArray(project.shows) ? project.shows : [];
+    return {
+      id: str(project.id, String(i)),
+      name: str(project.name ?? project.title, `Project ${i + 1}`),
+      items: entries.map((entry, j) => normalizeServiceItem(entry, j, shows)),
+    };
+  });
+}
+
+export function normalizeServiceItem(
+  raw: unknown,
+  i: number,
+  shows: ShowIndex,
+): ServiceItem {
+  const item = asRecord(raw);
+  const id = str(item.id, String(i));
+  const show = shows.get(id);
+  const rawName = str(item.name ?? show?.name ?? item.path ?? id);
   return {
-    id: str(r.id ?? r.uuid ?? i),
-    title: str(r.title ?? r.name ?? `Item ${i + 1}`),
-    plugin: str(r.plugin ?? r.type ?? '').toLowerCase(),
-    selected: Boolean(r.selected),
-    slides: r.slides != null ? num(r.slides) : undefined,
-    notes: r.notes != null ? str(r.notes) : undefined,
+    id,
+    title: cleanTitle(rawName) || `Item ${i + 1}`,
+    kind: classifyItem(item, show),
+    path: item.path != null ? str(item.path) : undefined,
+    notes: item.notes != null ? str(item.notes) : undefined,
   };
 }
 
-/** Convert OpenLP slide HTML into clean multi-line plain text. */
-export function stripHtml(html: string): string {
-  return html
-    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
-    .replace(/<\/(p|div|li|h[1-6])\s*>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+/** Pull plain text out of a slide's `items ▸ lines ▸ text ▸ value` nesting. */
+export function extractSlideText(raw: unknown): string {
+  const slide = asRecord(raw);
+  const items = Array.isArray(slide.items)
+    ? slide.items
+    : Array.isArray(slide.tempItems)
+      ? slide.tempItems
+      : [];
+
+  return items
+    .map((item) => {
+      const lines = asRecord(item).lines;
+      if (!Array.isArray(lines)) return '';
+      return lines
+        .map((line) => {
+          const parts = asRecord(line).text;
+          if (!Array.isArray(parts)) return '';
+          return parts.map((p) => str(asRecord(p).value)).join('');
+        })
+        .filter((s) => s.trim())
+        .join('\n');
+    })
+    .filter((s) => s.trim())
+    .join('\n\n')
     .trim();
 }
 
 /**
- * Normalise GET /controller/live-item into a {@link LiveItem}.
- * Handles both the object shape (`{ name, slide, total, html }`) and the
- * array-of-slides shape (each slide has `selected`, `html`/`text`, `title`).
+ * `SHOW` → a show with its slides flattened.
+ *
+ * The layout lists parent slides; each parent may have `children`. What the
+ * operator sees, and what `OUT_DATA.slide.index` counts, is parents and
+ * children interleaved in order — so that is what we build.
  */
-export function normalizeLiveItem(raw: unknown): LiveItem | null {
-  const results = unwrap(raw);
-  if (results == null) return null;
+export function flattenShow(raw: unknown, id: string): ShowDetail | null {
+  const show = asRecord(raw);
+  if (Object.keys(show).length === 0) return null;
 
-  // Array-of-slides shape
-  if (Array.isArray(results)) {
-    if (results.length === 0) return null;
-    const slides = results.map(asRecord);
-    let current = slides.findIndex((s) => Boolean(s.selected));
-    if (current < 0) current = 0;
-    const cur = slides[current];
-    const html = str(cur.html ?? cur.text ?? cur.chords ?? '');
+  const slideMap = asRecord(show.slides);
+  const layouts = asRecord(show.layouts);
+  const activeLayout = str(asRecord(show.settings).activeLayout);
+  const layout = asRecord(layouts[activeLayout] ?? Object.values(layouts)[0]);
+  const order = Array.isArray(layout.slides) ? layout.slides : [];
+
+  const slides: Slide[] = [];
+  const push = (slideId: string) => {
+    const slide = asRecord(slideMap[slideId]);
+    if (Object.keys(slide).length === 0) return;
+    slides.push({
+      id: slideId,
+      index: slides.length,
+      group: str(slide.group),
+      text: extractSlideText(slide),
+      notes: str(slide.notes),
+    });
+    const children = slide.children;
+    if (Array.isArray(children)) {
+      for (const child of children) push(str(child));
+    }
+  };
+
+  for (const entry of order) push(str(asRecord(entry).id));
+
+  const category = show.category == null ? null : str(show.category);
+  return {
+    id,
+    name: str(show.name, id),
+    category,
+    kind: classifyItem({ id }, { category }),
+    slides,
+  };
+}
+
+/** `OUT_DATA` → where the output currently is. */
+export interface OutputPosition {
+  showId: string | null;
+  layoutId: string | null;
+  index: number;
+  /** True when scripture (or other temporary content) is live, not a show. */
+  temporary: boolean;
+}
+
+export function normalizeOutput(raw: unknown): OutputPosition {
+  const slide = asRecord(asRecord(raw).slide);
+  const id = str(slide.id);
+  return {
+    showId: id && id !== 'temp' ? id : null,
+    layoutId: slide.layout != null ? str(slide.layout) : null,
+    index: num(slide.index),
+    temporary: id === 'temp',
+  };
+}
+
+/**
+ * Build the view-facing {@link LiveItem} from the output position plus the
+ * show it points at. Scripture is handled separately because FreeShow inlines
+ * it into the output rather than pointing at a show.
+ */
+export function buildLiveItem(
+  position: OutputPosition,
+  show: ShowDetail | null,
+): LiveItem | null {
+  if (position.temporary || !position.showId) return null;
+  if (!show || show.id !== position.showId) {
+    // Position known, show not loaded yet — report what we can.
     return {
-      id: str(cur.item ?? cur.id ?? '') || null,
-      plugin: str(cur.plugin ?? '') || null,
-      name: str(cur.title ?? slides[0].title ?? ''),
-      slide: current,
-      total: slides.length,
-      text: stripHtml(html),
-      tag: cur.tag != null ? str(cur.tag) : undefined,
+      id: position.showId,
+      kind: null,
+      name: '',
+      slide: position.index,
+      total: position.index + 1,
+      text: '',
+      nextText: '',
+      notes: '',
     };
   }
-
-  // Object shape
-  const r = asRecord(results);
-  if (Object.keys(r).length === 0) return null;
-  const html = str(r.html ?? r.text ?? '');
+  const current = show.slides[position.index];
+  const next = show.slides[position.index + 1];
   return {
-    id: str(r.item ?? r.id ?? '') || null,
-    plugin: str(r.plugin ?? '') || null,
-    name: str(r.name ?? r.title ?? ''),
-    slide: num(r.slide),
-    total: num(r.total, 1),
-    text: stripHtml(html),
-    tag: r.tag != null ? str(r.tag) : undefined,
+    id: show.id,
+    kind: show.kind,
+    name: show.name,
+    slide: position.index,
+    total: show.slides.length,
+    text: current?.text ?? '',
+    nextText: next?.text ?? '',
+    notes: current?.notes ?? '',
+    group: current?.group || undefined,
+  };
+}
+
+/**
+ * Scripture output. FreeShow inlines the verse into `OUT`/`OUT_DATA` as
+ * `tempItems`, with the reference and verse text in `customDynamicValues`.
+ */
+export function buildScriptureItem(raw: unknown): LiveItem | null {
+  const slide = asRecord(asRecord(raw).slide);
+  if (str(slide.id) !== 'temp') return null;
+  const dynamic = asRecord(slide.customDynamicValues);
+  const nextSlides = Array.isArray(slide.nextSlides) ? slide.nextSlides : [];
+  return {
+    id: null,
+    kind: null,
+    name: str(dynamic.scripture_name),
+    slide: 0,
+    total: 1,
+    text: extractSlideText(slide),
+    nextText: extractSlideText({ items: nextSlides[0] ?? [] }),
+    notes: '',
+    scriptureRef: str(dynamic.scripture_reference_full) || undefined,
+  };
+}
+
+/* ---------------------------------------------------------------- *
+ * Scripture
+ * ---------------------------------------------------------------- */
+
+/** `SCRIPTURE` → the installed bibles. */
+export function normalizeBibles(raw: unknown): BibleInfo[] {
+  return Object.entries(asRecord(raw)).map(([id, value]) => {
+    const bible = asRecord(value);
+    return {
+      id,
+      name: str(bible.name, id),
+      online: bible.api === true,
+    };
+  });
+}
+
+/** `GET_SCRIPTURE` → one bible, as deep as FreeShow filled it in. */
+export function normalizeBible(raw: unknown): Bible | null {
+  const payload = asRecord(raw);
+  const bible = asRecord(payload.bible);
+  if (Object.keys(bible).length === 0) return null;
+  const metadata = asRecord(bible.metadata);
+  const books = Array.isArray(bible.books) ? bible.books : [];
+
+  return {
+    id: str(payload.id),
+    name: str(bible.name ?? metadata.title),
+    language: metadata.language != null ? str(metadata.language) : undefined,
+    books: books.map(normalizeBook),
+  };
+}
+
+function normalizeBook(raw: unknown, i: number): BibleBook {
+  const book = asRecord(raw);
+  const chapters = Array.isArray(book.chapters) ? book.chapters : [];
+  return {
+    number: num(book.number, i + 1),
+    name: str(book.name, `Book ${i + 1}`),
+    key: str(book.id ?? book.key),
+    chapters: chapters.map(normalizeChapter),
+  };
+}
+
+function normalizeChapter(raw: unknown, i: number): BibleChapter {
+  const chapter = asRecord(raw);
+  const verses = Array.isArray(chapter.verses) ? chapter.verses : [];
+  return {
+    number: num(chapter.number, i + 1),
+    verses: verses.map(normalizeVerse),
+  };
+}
+
+function normalizeVerse(raw: unknown, i: number): BibleVerse {
+  const verse = asRecord(raw);
+  return {
+    number: num(verse.number, i + 1),
+    text: str(verse.text),
+  };
+}
+
+/** Human-readable reference for the UI: `"Jóhannes 3:16"`. */
+export function formatReference(
+  book: string,
+  chapter: number,
+  verse?: number,
+): string {
+  const base = `${book} ${chapter}`;
+  return verse ? `${base}:${verse}` : base;
+}
+
+/**
+ * What `start_scripture` actually wants — and it is not what the name suggests.
+ *
+ * The reference is **numeric and dot-separated**, `book.chapter.verse`, sent
+ * alongside the bible `id`. A human reference like `"1 Mósebók 1:3"` is
+ * accepted but only the book name is honoured: FreeShow silently shows verse
+ * 1:1. Confirmed by reading what RemoteShow itself sends.
+ */
+export function wireReference(
+  bookNumber: number,
+  chapter: number,
+  verse: number,
+): string {
+  return `${bookNumber}.${chapter}.${verse}`;
+}
+
+/**
+ * Resolve a typed reference (`"Jóh 3:16"`) against the loaded bible, so the
+ * free-text field can produce the numeric form too. Returns null when the book
+ * can't be matched, which is what drives the "check the book name" error.
+ */
+export function parseReference(
+  input: string,
+  bible: Bible | null,
+): { wire: string; display: string } | null {
+  if (!bible) return null;
+  const match = input.trim().match(/^(.+?)\s+(\d+)(?:[:.](\d+))?$/);
+  if (!match) return null;
+
+  const [, rawBook, rawChapter, rawVerse] = match;
+  const needle = rawBook.trim().toLowerCase();
+  const book =
+    bible.books.find((b) => b.name.toLowerCase() === needle) ??
+    bible.books.find((b) => b.name.toLowerCase().startsWith(needle)) ??
+    bible.books.find((b) => b.key.toLowerCase() === needle);
+  if (!book) return null;
+
+  const chapter = parseInt(rawChapter, 10);
+  const verse = rawVerse ? parseInt(rawVerse, 10) : 1;
+  return {
+    wire: wireReference(book.number, chapter, verse),
+    display: formatReference(book.name, chapter, verse),
   };
 }
