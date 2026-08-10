@@ -146,6 +146,10 @@ Keep `base: './'` regardless — it serves A and B equally well.
   - `7d28ea57-d588-4f2c-9672-4f59cca8b2a9` — TASK-10, contributing the findings upstream
   - `e55c5287-8d41-46d8-b5ab-7bd173028248` — **Recipe: reverse-engineering a socket protocol
     from a vendor's own web client** — the method and its traps, if this ever needs redoing
+  - `7c374dc4-899f-4861-baa7-bac6104169d2` — why a sequential fetch loop in a React effect
+    ends up doing "every other item" (unstable deps + shared guards)
+  - `08a95888-8cb4-484c-858c-23316473c9cf` — the window-keydown/focused-button double-fire,
+    and why the obvious fix disables the foot pedal
   - `b3df35f0-490d-45f6-b50d-21596f12f889` — the docs-derived note the above corrects
     (carries a correction banner; several of its central claims are wrong)
   - `1c9a3d51-6aa9-4fa2-a6c1-32e757f611b8` — FreeShow Bible import: json-bible spec + local validation
