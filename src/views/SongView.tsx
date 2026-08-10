@@ -44,6 +44,9 @@ export function SongView(): ReactNode {
   const swipe = useSwipe(next, prev);
 
   const songs = serviceItems.filter((it) => it.kind === 'song');
+  // A song tagged "Presentations" in FreeShow lands in the other view. Saying
+  // so beats an empty screen that looks like a broken connection.
+  const misfiled = serviceItems.filter((it) => it.kind === 'presentation').length;
   const liveId = liveItem?.id ?? null;
   const isLive = (id: string) => liveId !== null && id === liveId;
 
@@ -77,7 +80,11 @@ export function SongView(): ReactNode {
           <div className={styles.empty}>
             <Icon name="queue_music" size={40} />
             <p className={styles.emptyTitle}>No songs in this service</p>
-            <p className={styles.emptyDesc}>Ask the tech team to add songs to the service.</p>
+            <p className={styles.emptyDesc}>
+              {misfiled > 0
+                ? `${misfiled} item${misfiled === 1 ? ' is' : 's are'} tagged “Presentations” in FreeShow — set their category to Songs to see them here.`
+                : 'Ask the tech team to add songs to the service.'}
+            </p>
           </div>
         )}
 
