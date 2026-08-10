@@ -172,6 +172,25 @@ export function SettingsView(): ReactNode {
 
           <div className={styles.settingRow}>
             <div>
+              <div className={styles.settingTitle}>Image previews</div>
+              <div className={styles.settingDesc}>
+                FreeShow only sends full-size images — switch off on a weak network
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.imagePreviews}
+              aria-label="Image previews"
+              className={`${styles.toggle} ${settings.imagePreviews ? styles.toggleOn : ''}`}
+              onClick={() => updateSettings({ imagePreviews: !settings.imagePreviews })}
+            >
+              <span className={styles.toggleKnob} />
+            </button>
+          </div>
+
+          <div className={styles.settingRow}>
+            <div>
               <div className={styles.settingTitle}>On-screen text preview</div>
               <div className={styles.settingDesc}>Show what’s on the screens under the live song</div>
             </div>

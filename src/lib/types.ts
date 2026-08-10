@@ -22,6 +22,11 @@ export interface Settings {
   defaultRole: ViewId;
   /** Song view: show the current on-screen line under the live song card. */
   nextPreview: boolean;
+  /**
+   * Images view: fetch and downscale image previews. FreeShow only serves
+   * full-resolution images, so this costs real bandwidth on a weak network.
+   */
+  imagePreviews: boolean;
 }
 
 /**
@@ -55,6 +60,43 @@ export interface Project {
   items: ServiceItem[];
 }
 
+/** A run of text with its own styling, inside a line. */
+export interface SlideTextRun {
+  value: string;
+  /** Font size in FreeShow's 1920x1080 canvas pixels. */
+  fontSize?: number;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+}
+
+export interface SlideLine {
+  align?: 'left' | 'center' | 'right';
+  runs: SlideTextRun[];
+}
+
+/**
+ * A positioned text box on the slide, in FreeShow's 1920x1080 canvas pixels.
+ *
+ * Only a known-safe subset of the style string is kept — FreeShow's raw CSS is
+ * never handed to the DOM.
+ */
+export interface SlideItem {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  background?: string;
+  radius?: number;
+  padding?: number;
+  align?: 'left' | 'center' | 'right';
+  lines: SlideLine[];
+}
+
+/** The canvas FreeShow positions slide items against. */
+export const SLIDE_WIDTH = 1920;
+export const SLIDE_HEIGHT = 1080;
+
 /**
  * One slide, flattened out of FreeShow's hierarchy.
  *
@@ -70,6 +112,8 @@ export interface Slide {
   group: string;
   text: string;
   notes: string;
+  /** Positioned boxes, for rendering a visual preview. */
+  items: SlideItem[];
 }
 
 /** A show with its slides resolved and flattened. */
@@ -98,6 +142,10 @@ export interface LiveItem {
   notes: string;
   /** Group label of the current slide (`V1`, `C`…). */
   group?: string;
+  /** Positioned boxes for the current slide, for a visual preview. */
+  items: SlideItem[];
+  /** Positioned boxes for the next slide. */
+  nextItems: SlideItem[];
   /** Set when scripture is live: e.g. `"1 Mósebók 1:3"`. */
   scriptureRef?: string;
 }

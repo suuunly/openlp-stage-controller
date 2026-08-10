@@ -26,6 +26,7 @@ describe('storage', () => {
       fontSize: 'large',
       defaultRole: 'songs',
       nextPreview: false,
+      imagePreviews: false,
     });
     expect(localStorage.getItem(STORAGE_KEYS.host)).toBe('10.0.0.5');
     const loaded = loadSettings();

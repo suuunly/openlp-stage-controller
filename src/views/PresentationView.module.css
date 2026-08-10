@@ -56,6 +56,44 @@
   border-radius: var(--r-lg);
   border: 1px solid var(--c-line);
 }
+.preview {
+  margin: auto;
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+}
+/* The live slide takes what's left; the next strip keeps its own height. */
+.preview > :first-child {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.nextWrap {
+  flex: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.nextLabel {
+  flex: none;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-text-fainter);
+}
+/* Small enough to read as "what's coming", not to compete with the live slide. */
+.nextPreview {
+  max-width: 260px;
+  opacity: 0.75;
+}
+
 .slide {
   margin: auto;
   max-width: 22em;

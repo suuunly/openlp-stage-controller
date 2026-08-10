@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { fetchThumbnail } from '../lib/api';
+import { downscaleDataUrl } from '../lib/downscale';
 import { AppHeader } from '../components/AppHeader';
 import { Icon } from '../components/Icon';
 import styles from './ImagesView.module.css';
@@ -8,21 +9,21 @@ import styles from './ImagesView.module.css';
 /**
  * Images view.
  *
- * `API:get_thumbnail` exists (it is simply undocumented), but it does **not**
- * return a thumbnail — it returns the full-resolution image as base64. Measured
- * against five of Jóhann's images: 4 MB, 4 MB, 45 MB, 33 MB, 10 MB — ~96 MB to
- * decorate five list rows. On an iPad over church WiFi that is indefensible, so
- * the cards stay titled and the fetch is disabled at the call site.
+ * `API:get_thumbnail` is undocumented and misnamed: it returns the
+ * **full-resolution** image as base64 and honours no size hint — measured at 4,
+ * 4, 45, 33 and 10 MB for five images. So each one is fetched once, shrunk
+ * immediately, and the big string dropped; only a ~400px preview is kept.
  *
- * The machinery is kept, and works, for whenever FreeShow grows a real
- * thumbnail endpoint (TASK-10) or someone decides the trade is worth it.
+ * The transfer cost is real and unavoidable, which is why previews are a
+ * setting. Default on, because a grid of identical icons is close to useless
+ * for choosing an image — but switchable when the network is poor.
  */
 export function ImagesView(): ReactNode {
-  const { serviceItems, liveItem, activateItem, activeProject, connection } = useApp();
+  const { serviceItems, liveItem, activateItem, activeProject, connection, settings } =
+    useApp();
 
   const images = serviceItems.filter((it) => it.kind === 'image');
-  // Thumbnails are OFF deliberately — see useThumbnails().
-  const thumbs = useThumbnails(images, connection, false);
+  const thumbs = useThumbnails(images, connection, settings.imagePreviews);
   const liveId = liveItem?.id ?? null;
   const showing = images.find((it) => it.id === liveId) ?? null;
 
@@ -74,7 +75,9 @@ export function ImagesView(): ReactNode {
           {showing ? `Now showing: ${showing.title}` : 'Nothing from this list is on screen'}
         </span>
         <span className={styles.note}>
-          No previews — FreeShow only offers full-size images
+          {settings.imagePreviews
+            ? 'Previews are downscaled on this device'
+            : 'Previews off — switch on in Settings'}
         </span>
       </footer>
     </section>
@@ -115,9 +118,12 @@ function useThumbnails(
         asked.current.add(image.id);
         const path = image.path ?? image.id;
         if (!path) continue;
-        const url = await fetchThumbnail(path);
+        const full = await fetchThumbnail(path);
         if (!alive) break;
-        if (url) setThumbs((prev) => ({ ...prev, [image.id]: url }));
+        // Shrink before storing; the full-size string is not kept.
+        const small = await downscaleDataUrl(full);
+        if (!alive) break;
+        if (small) setThumbs((prev) => ({ ...prev, [image.id]: small }));
       }
       running.current = false;
     })();
