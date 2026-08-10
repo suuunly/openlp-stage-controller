@@ -4,6 +4,7 @@ import { useTapGuard } from '../hooks/useTapGuard';
 import { useSwipe } from '../hooks/useSwipe';
 import { useNavKeys } from '../hooks/useNavKeys';
 import { AppHeader } from '../components/AppHeader';
+import { SlidePreview } from '../components/SlidePreview';
 import { Icon } from '../components/Icon';
 import styles from './PresentationView.module.css';
 
@@ -11,8 +12,11 @@ import styles from './PresentationView.module.css';
  * Presentation view.
  *
  * Speaker notes come from `get_show`'s per-slide `notes` — they are not in the
- * published API, which is why TASK-07 recorded them as impossible. Thumbnails
- * remain unavailable, so the current slide is shown as text.
+ * published API, which is why TASK-07 recorded them as impossible.
+ *
+ * The slide itself is *drawn*, not fetched: FreeShow has no slide bitmap, so
+ * `SlidePreview` renders it from its own layout data. Text remains the fallback
+ * when a slide carries no usable geometry.
  */
 export function PresentationView(): ReactNode {
   const {
@@ -64,7 +68,7 @@ export function PresentationView(): ReactNode {
         }
       />
 
-      {decks.length > 1 && (
+      {decks.length > 0 && (
         <div className={styles.picker} role="group" aria-label="Choose a presentation">
           {decks.map((deck) => (
             <button
@@ -87,6 +91,20 @@ export function PresentationView(): ReactNode {
             <p className={styles.emptyDesc}>
               Ask the tech team to add one to the FreeShow project.
             </p>
+          </div>
+        ) : live && liveItem && liveItem.items.length > 0 ? (
+          <div className={styles.preview}>
+            <SlidePreview items={liveItem.items} label={`Slide ${liveItem.slide + 1}`} />
+            {liveItem.nextItems.length > 0 && (
+              <div className={styles.nextWrap}>
+                <span className={styles.nextLabel}>Next</span>
+                <SlidePreview
+                  items={liveItem.nextItems}
+                  className={styles.nextPreview}
+                  label="Next slide"
+                />
+              </div>
+            )}
           </div>
         ) : slideText ? (
           <p className={styles.slide} style={{ fontSize: 'var(--reading-size)' }}>

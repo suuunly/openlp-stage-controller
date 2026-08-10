@@ -1,4 +1,5 @@
 import { FreeShowSocket, socketUrl } from './socket';
+import { SLIDE_HEIGHT, SLIDE_WIDTH } from './types';
 import type {
   Bible,
   BibleBook,
@@ -12,6 +13,9 @@ import type {
   ServiceItem,
   ShowDetail,
   Slide,
+  SlideItem,
+  SlideLine,
+  SlideTextRun,
 } from './types';
 
 /**
@@ -280,6 +284,102 @@ export function extractSlideText(raw: unknown): string {
     .trim();
 }
 
+/* ---------------------------------------------------------------- *
+ * Slide geometry — for rendering a visual preview
+ *
+ * FreeShow never sends a picture of a slide (`get_thumbnail` returns nothing
+ * for a show), so a preview has to be drawn from the slide's own layout, the
+ * way RemoteShow does it. Items are positioned against a 1920x1080 canvas.
+ * ---------------------------------------------------------------- */
+
+/** Parse `"top: 30px;left: 30px;…"` into a plain map. Unknown keys are kept
+ *  here and filtered by the callers, so nothing raw reaches the DOM. */
+export function parseStyle(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rule of str(raw).split(';')) {
+    const at = rule.indexOf(':');
+    if (at < 0) continue;
+    const key = rule.slice(0, at).trim().toLowerCase();
+    const value = rule.slice(at + 1).trim();
+    if (key && value) out[key] = value;
+  }
+  return out;
+}
+
+function px(value: string | undefined, fallback = 0): number {
+  if (!value) return fallback;
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** Only colours we can vouch for: no `url()`, no expressions. */
+function safeColor(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const v = value.trim();
+  return /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,/%]+\)|hsla?\([\d\s.,/%deg]+\)|[a-z]+)$/i.test(v)
+    ? v
+    : undefined;
+}
+
+function readAlign(value: string | undefined): 'left' | 'center' | 'right' | undefined {
+  const v = (value ?? '').toLowerCase();
+  if (v.includes('center')) return 'center';
+  if (v.includes('right')) return 'right';
+  if (v.includes('left')) return 'left';
+  return undefined;
+}
+
+function normalizeTextRun(raw: unknown): SlideTextRun {
+  const part = asRecord(raw);
+  const style = parseStyle(part.style);
+  const weight = style['font-weight'] ?? '';
+  return {
+    value: str(part.value),
+    fontSize: style['font-size'] ? px(style['font-size']) : undefined,
+    color: safeColor(style.color),
+    bold: weight === 'bold' || px(weight) >= 600,
+    italic: (style['font-style'] ?? '').includes('italic'),
+  };
+}
+
+function normalizeLine(raw: unknown): SlideLine {
+  const line = asRecord(raw);
+  const parts = Array.isArray(line.text) ? line.text : [];
+  return {
+    align: readAlign(parseStyle(line.align)['text-align'] ?? str(line.align)),
+    runs: parts.map(normalizeTextRun).filter((r) => r.value !== ''),
+  };
+}
+
+/** Positioned boxes for one slide, safe to render. */
+export function normalizeSlideItems(raw: unknown): SlideItem[] {
+  const slide = asRecord(raw);
+  const items = Array.isArray(slide.items)
+    ? slide.items
+    : Array.isArray(slide.tempItems)
+      ? slide.tempItems
+      : [];
+
+  return items
+    .map((entry): SlideItem => {
+      const item = asRecord(entry);
+      const style = parseStyle(item.style);
+      const lines = Array.isArray(item.lines) ? item.lines : [];
+      return {
+        left: px(style.left),
+        top: px(style.top),
+        width: px(style.width, SLIDE_WIDTH),
+        height: px(style.height, SLIDE_HEIGHT),
+        background: safeColor(style['background-color']),
+        radius: style['border-radius'] ? px(style['border-radius']) : undefined,
+        padding: style.padding ? px(style.padding) : undefined,
+        align: readAlign(str(item.align)),
+        lines: lines.map(normalizeLine).filter((l) => l.runs.length > 0),
+      };
+    })
+    .filter((item) => item.lines.length > 0);
+}
+
 /**
  * `SHOW` → a show with its slides flattened.
  *
@@ -307,6 +407,7 @@ export function flattenShow(raw: unknown, id: string): ShowDetail | null {
       group: str(slide.group),
       text: extractSlideText(slide),
       notes: str(slide.notes),
+      items: normalizeSlideItems(slide),
     });
     const children = slide.children;
     if (Array.isArray(children)) {
@@ -367,6 +468,8 @@ export function buildLiveItem(
       text: '',
       nextText: '',
       notes: '',
+      items: [],
+      nextItems: [],
     };
   }
   const current = show.slides[position.index];
@@ -381,6 +484,8 @@ export function buildLiveItem(
     nextText: next?.text ?? '',
     notes: current?.notes ?? '',
     group: current?.group || undefined,
+    items: current?.items ?? [],
+    nextItems: next?.items ?? [],
   };
 }
 
@@ -402,6 +507,8 @@ export function buildScriptureItem(raw: unknown): LiveItem | null {
     text: extractSlideText(slide),
     nextText: extractSlideText({ items: nextSlides[0] ?? [] }),
     notes: '',
+    items: normalizeSlideItems(slide),
+    nextItems: normalizeSlideItems({ items: nextSlides[0] ?? [] }),
     scriptureRef: str(dynamic.scripture_reference_full) || undefined,
   };
 }

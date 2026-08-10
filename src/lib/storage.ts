@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   fontSize: 'freeshow_font_size',
   defaultRole: 'freeshow_default_role',
   nextPreview: 'freeshow_next_preview',
+  imagePreviews: 'freeshow_image_previews',
 } as const;
 
 /** The keys written by the OpenLP-era build, cleared on first load. */
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 'medium',
   defaultRole: 'home',
   nextPreview: true,
+  imagePreviews: true,
 };
 
 const FONT_SIZES: FontSize[] = ['small', 'medium', 'large'];
@@ -89,6 +91,10 @@ export function loadSettings(): Settings {
       get(STORAGE_KEYS.nextPreview) === null
         ? DEFAULT_SETTINGS.nextPreview
         : get(STORAGE_KEYS.nextPreview) === 'true',
+    imagePreviews:
+      get(STORAGE_KEYS.imagePreviews) === null
+        ? DEFAULT_SETTINGS.imagePreviews
+        : get(STORAGE_KEYS.imagePreviews) === 'true',
   };
 }
 
@@ -99,6 +105,7 @@ export function saveSettings(s: Settings): void {
   localStorage.setItem(STORAGE_KEYS.fontSize, s.fontSize);
   localStorage.setItem(STORAGE_KEYS.defaultRole, s.defaultRole);
   localStorage.setItem(STORAGE_KEYS.nextPreview, String(s.nextPreview));
+  localStorage.setItem(STORAGE_KEYS.imagePreviews, String(s.imagePreviews));
 }
 
 /** The app is "configured" once a host has been entered. */

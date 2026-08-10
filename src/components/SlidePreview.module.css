@@ -1,0 +1,43 @@
+/*
+ * The frame is the responsive element; the canvas inside it is always exactly
+ * 1920x1080 and gets scaled to fit, so slide items keep their original units.
+ */
+.frame {
+  position: relative;
+  width: 100%;
+  /* With aspect-ratio set, a max-height shrinks the width to match — which is
+     what lets the current and next previews share a fixed-height stage without
+     the second one being clipped. */
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  /* Black, like the output — a slide's own colours are meant to sit on it. */
+  background: #000;
+  border: 1px solid var(--c-line-strong);
+}
+
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  font-family: var(--font-serif);
+  color: #fff;
+  line-height: 1.2;
+}
+
+.item {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.line {
+  margin: 0;
+  /* FreeShow wraps long lines; matching that keeps the preview honest. */
+  overflow-wrap: anywhere;
+}
