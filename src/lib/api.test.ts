@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildLiveItem,
+  parseReference,
+  wireReference,
   buildScriptureItem,
   classifyItem,
   cleanTitle,
@@ -296,9 +298,46 @@ describe('scripture browsing', () => {
   });
 });
 
-describe('formatReference', () => {
-  it('formats what start_scripture expects, with Faroese book names', () => {
+describe('references', () => {
+  const VICTOR = {
+    id: '6ef117816db',
+    name: 'Victor',
+    language: 'fo',
+    books: [
+      { number: 1, name: '1 Mósebók', key: 'GEN', chapters: [] },
+      { number: 43, name: 'Jóhannes', key: 'JHN', chapters: [] },
+    ],
+  };
+
+  it('formats a human-readable reference for the UI', () => {
     expect(formatReference('Jóhannes', 3, 16)).toBe('Jóhannes 3:16');
     expect(formatReference('1 Mósebók', 1)).toBe('1 Mósebók 1');
+  });
+
+  it('builds the numeric form start_scripture actually wants', () => {
+    // Sending "1 Mósebók 1:3" shows the right book but silently lands on 1:1 —
+    // FreeShow only honours book.chapter.verse as numbers.
+    expect(wireReference(1, 1, 3)).toBe('1.1.3');
+  });
+
+  it('resolves a typed reference against the loaded bible', () => {
+    expect(parseReference('1 Mósebók 1:3', VICTOR)).toEqual({
+      wire: '1.1.3',
+      display: '1 Mósebók 1:3',
+    });
+  });
+
+  it('accepts an abbreviated Faroese book name', () => {
+    expect(parseReference('Jóh 3:16', VICTOR)?.wire).toBe('43.3.16');
+  });
+
+  it('defaults to verse 1 when only a chapter is given', () => {
+    expect(parseReference('Jóhannes 3', VICTOR)?.wire).toBe('43.3.1');
+  });
+
+  it('returns null for an unknown book, which drives the error state', () => {
+    expect(parseReference('Nonsense 3:16', VICTOR)).toBeNull();
+    expect(parseReference('gibberish', VICTOR)).toBeNull();
+    expect(parseReference('Jóh 3:16', null)).toBeNull();
   });
 });

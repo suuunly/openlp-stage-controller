@@ -55,6 +55,7 @@
 }
 
 .showBtn {
+  width: 100%;
   height: var(--tap-nav);
   border-radius: var(--r-md);
   background: var(--grad-accent);
@@ -76,6 +77,11 @@
   box-shadow: none;
   color: var(--c-text-fainter);
   cursor: default;
+}
+
+.actions {
+  flex: none;
+  padding: 0 var(--s-7) var(--s-3);
 }
 
 .historyWrap {
@@ -245,4 +251,126 @@
     border-right: none;
     border-bottom: 1px solid var(--c-line);
   }
+}
+
+
+/* ---- bible switcher in the header ---- */
+.bibleCycle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 260px;
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--c-line-3);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 600;
+  font-size: 15px;
+}
+.bibleCycle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bibleCycle:hover {
+  background: var(--c-surface-hover);
+}
+
+/* ---- Book ▸ Chapter ▸ Verse picker ---- */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.crumb {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-xs);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 600;
+  font-size: 14px;
+}
+.crumb:not(:last-child)::after {
+  content: '›';
+  margin-left: 10px;
+  color: var(--c-text-fainter);
+}
+
+.picker {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.pickerEmpty {
+  margin: var(--s-5) 0;
+  color: var(--c-text-fainter);
+  font-size: 15px;
+}
+
+.bookList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bookBtn {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 12px 16px;
+  text-align: left;
+  border-radius: var(--r-xs);
+  background: var(--c-surface-2);
+  color: var(--c-text-2);
+  font-weight: 600;
+  font-size: 17px;
+  transition: background 0.12s;
+}
+.bookBtn:hover {
+  background: var(--c-surface-hover);
+}
+.bookBtn:active {
+  transform: scale(0.99);
+}
+
+.numGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 8px;
+}
+.numBtn {
+  height: 52px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--c-line-3);
+  background: var(--c-surface-2);
+  color: var(--c-text-3);
+  font-weight: 700;
+  font-size: 16px;
+  transition: all 0.12s;
+}
+.numBtn:active {
+  transform: scale(0.94);
+}
+.numBtnOn {
+  border-color: var(--c-accent-border);
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+
+/* Amber = not on screen yet, matching the design's "pending" language. */
+.previewBadge {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--c-warn-border);
+  background: var(--c-warn-tint);
+  color: var(--c-warn-text);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.1em;
 }

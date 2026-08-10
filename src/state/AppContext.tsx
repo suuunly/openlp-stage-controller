@@ -79,7 +79,8 @@ interface AppContextValue {
   /** Put a show on screen (the SHOW + index_select_slide two-step). */
   activateItem: (id: string) => void;
   jumpToSlide: (showId: string | null, slide: number) => void;
-  showScripture: (reference: string) => void;
+  /** `reference` is FreeShow's numeric `book.chapter.verse` form. */
+  showScripture: (reference: string, bibleId?: string) => void;
   verseNext: () => void;
   versePrev: () => void;
 }
@@ -260,8 +261,8 @@ export function AppProvider({ children }: { children: ReactNode }): ReactNode {
   const jumpToSlide = useCallback((showId: string | null, slide: number) => {
     if (showId) selectSlide(showId, slide);
   }, []);
-  const showScripture = useCallback((reference: string) => {
-    startScripture(reference);
+  const showScripture = useCallback((reference: string, bibleId?: string) => {
+    startScripture(reference, bibleId);
   }, []);
   const verseNext = useCallback(() => scriptureNext(), []);
   const versePrev = useCallback(() => scripturePrevious(), []);

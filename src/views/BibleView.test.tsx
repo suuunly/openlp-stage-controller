@@ -7,6 +7,32 @@ import { STORAGE_KEYS } from '../lib/storage';
 import { MockWebSocket } from '../test/mockSocket';
 import { pushHistory } from './BibleView';
 
+/** A trimmed stand-in for Elim's Faroese Victor bible. */
+const VICTOR = {
+  id: '6ef117816db',
+  bible: {
+    name: 'Victor',
+    metadata: { title: 'Victor', language: 'fo' },
+    books: [
+      {
+        number: 1,
+        name: '1 Mósebók',
+        id: 'GEN',
+        chapters: [
+          {
+            number: 1,
+            verses: [
+              { number: 1, text: 'Í upphavi skapti Gud himmal og jørð.' },
+              { number: 3, text: "Gud segði: 'Verði ljós!' Og ljós varð." },
+            ],
+          },
+        ],
+      },
+      { number: 43, name: 'Jóhannes', id: 'JHN', chapters: [] },
+    ],
+  },
+};
+
 /** Land in the Bible view with the app configured and the socket authenticated. */
 function renderBibleView() {
   localStorage.setItem(STORAGE_KEYS.host, '10.0.0.5');
@@ -18,7 +44,12 @@ function renderBibleView() {
       <App />
     </AppProvider>,
   );
-  act(() => MockWebSocket.last().handshake());
+  act(() => {
+    const socket = MockWebSocket.last();
+    socket.handshake();
+    socket.channel('SCRIPTURE', { '6ef117816db': { name: 'Victor', api: false } });
+    socket.channel('GET_SCRIPTURE', VICTOR);
+  });
   return view;
 }
 
@@ -44,29 +75,62 @@ describe('pushHistory', () => {
 });
 
 describe('Bible view', () => {
-  it('sends start_scripture with the reference as typed', async () => {
+  it('resolves a typed Faroese reference to FreeShow’s numeric form', async () => {
     const user = userEvent.setup();
     renderBibleView();
 
     await user.type(screen.getByLabelText('Reference'), 'Jóh 3:16');
     await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
 
-    // Faroese book names go through untouched — FreeShow parses the string.
+    // Sending the text form shows the right book but silently lands on 1:1.
     expect(MockWebSocket.last().find('API:start_scripture')).toEqual({
-      reference: 'Jóh 3:16',
+      reference: '43.3.16',
+      id: '6ef117816db',
     });
+  });
+
+  it('previews the verse before it goes on screen, then sends the picked one', async () => {
+    const user = userEvent.setup();
+    renderBibleView();
+
+    await user.click(screen.getByRole('button', { name: '1 Mósebók' }));
+    await user.click(screen.getByRole('button', { name: '1' }));
+    await user.click(screen.getByRole('button', { name: '3' }));
+
+    // Read on the device first — nothing has been sent yet.
+    expect(screen.getByText(/Verði ljós/)).toBeInTheDocument();
+    expect(screen.getByText('PREVIEW')).toBeInTheDocument();
+    expect(MockWebSocket.last().find('API:start_scripture')).toBeUndefined();
+
+    await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
+    expect(MockWebSocket.last().find('API:start_scripture')).toEqual({
+      reference: '1.1.3',
+      id: '6ef117816db',
+    });
+  });
+
+  it('says so when the book name doesn’t resolve', async () => {
+    const user = userEvent.setup();
+    renderBibleView();
+
+    await user.type(screen.getByLabelText('Reference'), 'Nonsense 3:16');
+    await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
+
+    expect(screen.getByText(/check the book name/i)).toBeInTheDocument();
+    expect(MockWebSocket.last().find('API:start_scripture')).toBeUndefined();
   });
 
   it('adds the shown reference to the history strip', async () => {
     const user = userEvent.setup();
     renderBibleView();
 
-    await user.type(screen.getByLabelText('Reference'), 'Sálm 23');
+    await user.type(screen.getByLabelText('Reference'), 'Jóhannes 3:16');
     await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
 
-    expect(await screen.findByRole('button', { name: 'Sálm 23' })).toBeInTheDocument();
+    // History keeps the human form, not the numeric one sent over the wire.
+    expect(await screen.findByRole('button', { name: 'Jóhannes 3:16' })).toBeInTheDocument();
     expect(JSON.parse(sessionStorage.getItem('verse_history') ?? '[]')).toEqual([
-      'Sálm 23',
+      'Jóhannes 3:16',
     ]);
   });
 
@@ -90,6 +154,7 @@ describe('Bible view', () => {
 
     await user.type(screen.getByLabelText('Reference'), '1 Mósebók 1:3');
     await user.click(screen.getByRole('button', { name: 'SHOW ON SCREEN' }));
+
 
     // FreeShow inlines scripture into the output rather than pointing at a show.
     act(() =>

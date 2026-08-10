@@ -40,9 +40,10 @@ test('every role opens and shows its own empty state', async ({ page }) => {
   await expect(page.getByText('No notes for this slide')).toBeVisible();
 });
 
-test('the Bible view accepts a Faroese reference', async ({ page }) => {
-  // No FreeShow here, so this covers the local behaviour: the reference is
-  // accepted and remembered. The wire format is covered by the unit tests.
+test('the Bible view refuses a reference it cannot resolve', async ({ page }) => {
+  // With no FreeShow there is no bible loaded, so nothing can be resolved to
+  // FreeShow's numeric book.chapter.verse form. Saying so beats sending a
+  // reference that would silently land on the wrong verse.
   await page.goto('/');
   await page.getByPlaceholder('192.168.1.50').fill('192.168.1.50');
   await page.getByRole('button', { name: /Connect|Go to Stage/i }).click();
@@ -51,6 +52,5 @@ test('the Bible view accepts a Faroese reference', async ({ page }) => {
   await page.getByLabel('Reference').fill('Jóh 3:16');
   await page.getByRole('button', { name: 'SHOW ON SCREEN' }).click();
 
-  // The reference joins the history strip so it can be re-shown in one tap.
-  await expect(page.getByRole('button', { name: 'Jóh 3:16' })).toBeVisible();
+  await expect(page.getByText(/check the book name/i)).toBeVisible();
 });

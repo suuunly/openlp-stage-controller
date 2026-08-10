@@ -466,7 +466,7 @@ function normalizeVerse(raw: unknown, i: number): BibleVerse {
   };
 }
 
-/** Format a reference the way `start_scripture` expects: `"Jóhannes 3:16"`. */
+/** Human-readable reference for the UI: `"Jóhannes 3:16"`. */
 export function formatReference(
   book: string,
   chapter: number,
@@ -474,4 +474,49 @@ export function formatReference(
 ): string {
   const base = `${book} ${chapter}`;
   return verse ? `${base}:${verse}` : base;
+}
+
+/**
+ * What `start_scripture` actually wants — and it is not what the name suggests.
+ *
+ * The reference is **numeric and dot-separated**, `book.chapter.verse`, sent
+ * alongside the bible `id`. A human reference like `"1 Mósebók 1:3"` is
+ * accepted but only the book name is honoured: FreeShow silently shows verse
+ * 1:1. Confirmed by reading what RemoteShow itself sends.
+ */
+export function wireReference(
+  bookNumber: number,
+  chapter: number,
+  verse: number,
+): string {
+  return `${bookNumber}.${chapter}.${verse}`;
+}
+
+/**
+ * Resolve a typed reference (`"Jóh 3:16"`) against the loaded bible, so the
+ * free-text field can produce the numeric form too. Returns null when the book
+ * can't be matched, which is what drives the "check the book name" error.
+ */
+export function parseReference(
+  input: string,
+  bible: Bible | null,
+): { wire: string; display: string } | null {
+  if (!bible) return null;
+  const match = input.trim().match(/^(.+?)\s+(\d+)(?:[:.](\d+))?$/);
+  if (!match) return null;
+
+  const [, rawBook, rawChapter, rawVerse] = match;
+  const needle = rawBook.trim().toLowerCase();
+  const book =
+    bible.books.find((b) => b.name.toLowerCase() === needle) ??
+    bible.books.find((b) => b.name.toLowerCase().startsWith(needle)) ??
+    bible.books.find((b) => b.key.toLowerCase() === needle);
+  if (!book) return null;
+
+  const chapter = parseInt(rawChapter, 10);
+  const verse = rawVerse ? parseInt(rawVerse, 10) : 1;
+  return {
+    wire: wireReference(book.number, chapter, verse),
+    display: formatReference(book.name, chapter, verse),
+  };
 }
